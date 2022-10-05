@@ -1,0 +1,19 @@
+[package]
+name = "rare"
+version = "0.1.0"
+edition = "2021"
+description = "Rational function reconstruction"
+authors = ["Andreas Maier <andreas.martin.maier@desy.de>"]
+license = "GPL-3.0-or-later"
+readme = "Readme.md"
+keywords = []
+categories = ["Mathematics"]
+
+[dependencies]
+ahash = "0.8.0"
+galois-fields = { git = "ssh://git@gitlab.desy.de/andreas.martin.maier/galois-fields.git", features = ["num-traits", "rand"] }
+num-traits = "0.2.15"
+rand = "0.8.5"
+
+[dev-dependencies]
+rand_xoshiro = "0.6.0"
