@@ -100,7 +100,7 @@ impl NewtonRec {
         let mut res: NewtonPolynomial2<Z64<P>> = Default::default();
         let mut rand = UniqueRand::new();
         while let Some(x1) = rand.try_gen(&mut rng) {
-            trace!("x = {x1}");
+            trace!("x1 = {x1}");
             let prefact = res.val.iter().fold(
                 Z64::<P>::one(),
                 |p, pt| p * (x1 - pt)
@@ -111,7 +111,7 @@ impl NewtonRec {
                 &mut rng
             );
             if let Some(a) = a {
-                trace!("Reconstructed coefficient {}", FmtNewtonPoly::new(&a, &["y"]));
+                trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
                 res.add_term(a, x1);
                 trace!("Intermediate poly: {res}");
                 if res.coeff.iter().rev().take_while(|c| c.is_zero()).count() > self.extra_pts {
@@ -395,7 +395,7 @@ macro_rules! impl_newton_poly_recursive {
                         for (a, y) in p.coeff.iter().zip(p.val.iter()) {
                             let a = UniPolynomial::from(a);
                             let term = &prod * &a;
-                            trace!("({prod}) * ({a}) = {term}");
+                            trace!("({prod}) * ({}) = {term}", Self::from(a));
                             res += term;
                             let my = [<UniPolynomial $y>]::from(-*y);
                             prod *= &Self::from_coeff_unchecked(vec![my, One::one()]);
@@ -403,7 +403,7 @@ macro_rules! impl_newton_poly_recursive {
                         if let Some(last) = p.coeff.last() {
                             let last = UniPolynomial::from(last);
                             let term = &prod * &last;
-                            trace!("({prod}) * ({last}) = {term}");
+                            trace!("({prod}) * ({}) = {term}", Self::from(last));
                             res += term;
                         }
                         res
