@@ -1,4 +1,19 @@
 use galois_fields::Z64;
+use rand::{Rng, thread_rng};
+
+pub trait Rec<R, Args> {
+    type Output;
+
+    fn rec_with_ran(
+        &mut self,
+        reconstructor: R,
+        rng: impl Rng
+    ) -> Self::Output;
+
+    fn rec(&mut self, reconstructor: R) -> Self::Output {
+        self.rec_with_ran(reconstructor, thread_rng())
+    }
+}
 
 pub trait Eval<T> {
     type Output;
@@ -60,4 +75,10 @@ impl<const P: u64> Cardinality for Z64<P> {
     fn cardinality()-> Option<usize> {
         Some(P as usize)
     }
+}
+
+pub trait WithVars<'a, V> {
+    type Output;
+
+    fn with_vars(&'a self, vars: V) -> Self::Output;
 }

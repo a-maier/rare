@@ -2,8 +2,9 @@ use std::{ops::{AddAssign, SubAssign, Add, Sub, Mul, MulAssign, DivAssign, Div},
 
 use galois_fields::Z64;
 use itertools::Itertools;
+use paste::paste;
 
-use crate::traits::{Zero, One, Eval};
+use crate::traits::{Zero, One, Eval, WithVars};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct UniPolynomial<T> {
@@ -326,13 +327,16 @@ impl<T: One> One for UniPolynomial<T> {
     }
 }
 
-pub type UniPolynomial1<T> = UniPolynomial<T>;
-pub type UniPolynomial2<T> = UniPolynomial<UniPolynomial<T>>;
-pub type UniPolynomial3<T> = UniPolynomial<UniPolynomial2<T>>;
-pub type UniPolynomial4<T> = UniPolynomial<UniPolynomial3<T>>;
-pub type UniPolynomial5<T> = UniPolynomial<UniPolynomial4<T>>;
+impl<T: Zero> From<T> for UniPolynomial<T> {
+    fn from(z: T) -> Self {
+        if z.is_zero() {
+            Self::zero()
+        } else {
+            Self::from_coeff_unchecked(vec![z])
+        }
+    }
+}
 
-// TODO: macros?
 impl<const P: u64> Eval<Z64<P>> for UniPolynomial<Z64<P>> {
     type Output = Z64<P>;
 
@@ -352,19 +356,129 @@ impl<const P: u64> Eval<[Z64<P>; 1]> for UniPolynomial<Z64<P>> {
     }
 }
 
-impl<const P: u64> Eval<[Z64<P>; 2]> for UniPolynomial2<Z64<P>> {
-    type Output = Z64<P>;
+impl<'a, 'b, T, S: Display> WithVars<'a, &'b [S; 1]> for UniPolynomial<T>
+where
+    T: Display + One + Zero + 'a,
+{
+    type Output = FmtUniPoly<'a, 'b, T, S>;
 
-    fn eval(&self, x: &[Z64<P>; 2]) -> Z64<P> {
-        let (x0, rest) = x.split_first().unwrap();
-        let mut xs = [Zero::zero(); 1];
-        xs.copy_from_slice(rest);
-        self.coeff.iter().rev().fold(
-            Zero::zero(),
-            |acc, c| acc * x0 + c.eval(&xs)
-        )
+    fn with_vars(&'a self, vars: &'b[S; 1]) -> Self::Output {
+        FmtUniPoly::new(self, vars)
     }
 }
+
+pub type UniPolynomial1<T> = UniPolynomial<T>;
+
+macro_rules! count {
+    () => {0usize};
+    ($_head:tt $($tail:tt)*) => {1usize + count!($($tail)*)};
+}
+
+macro_rules! impl_dense_poly {
+    ( $($x:literal), *) => {
+        pub(crate) const ALL_VARS: [&str; count!($($x)*)] = [$(
+            concat!("x", stringify!($x)),
+        )*];
+
+        $(
+            paste! {
+                impl<const P: u64> Display for [<UniPolynomial $x>]<Z64<P>> {
+                    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                        const VARS: [&str; $x] = {
+                            let mut vars = [""; $x];
+                            let mut num = 0;
+                            while num < vars.len() {
+                                vars[num] = ALL_VARS[num];
+                                num += 1;
+                            }
+                            vars
+                        };
+                        self.with_vars(&VARS).fmt(f)
+                    }
+                }
+
+                impl<'a, 'b, V: Display, const P: u64> Display for FmtUniPoly<'a, 'b, [<UniPolynomial $x>]<Z64<P>>, V> {
+                    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                        if self.poly.coeff.is_empty() {
+                            return write!(f, "0");
+                        }
+                        let coeff = self.poly.coeff.iter().enumerate().filter(|(_, c)| !c.is_zero());
+                        let var = &self.var[0];
+                        write!(f, "{}", coeff.map(|(pow, coeff)| {
+                            let coeff = FmtUniPoly::new(coeff, &self.var[1..]);
+                            match pow {
+                                0 => format!("{coeff}"),
+                                1 => if coeff.poly.is_one() {
+                                    format!("{var}")
+                                } else if coeff.poly.nterms() == 1 {
+                                    format!("{coeff}*{var}")
+                                } else {
+                                    format!("({coeff})*{var}")
+                                },
+                                _ => if coeff.poly.is_one() {
+                                    format!("{var}^{pow}")
+                                } else if coeff.poly.nterms() == 1 {
+                                    format!("{coeff}*{var}^{pow}")
+                                } else {
+                                    format!("({coeff})*{var}^{pow}")
+                                }
+                            }
+                        }).join(" + ")
+                        )
+                    }
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_dense_poly_recursive {
+    ( $($x:literal, $y:literal), * ) => {
+        $(
+            paste! {
+                pub type [<UniPolynomial $x>]<T> = UniPolynomial<[<UniPolynomial $y>]<T>>;
+
+                impl<const P: u64> From<Z64<P>> for [<UniPolynomial $x>]<Z64<P>> {
+                    fn from(z: Z64<P>) -> Self {
+                        if z.is_zero() {
+                            Self::zero()
+                        } else {
+                            Self::from_coeff_unchecked(vec![
+                                [<UniPolynomial $y>]::from(z)
+                            ])
+                        }
+                    }
+                }
+
+                impl<const P: u64> Eval<[Z64<P>; $x]> for [<UniPolynomial $x>]<Z64<P>> {
+                    type Output = Z64<P>;
+
+                    fn eval(&self, x: &[Z64<P>; $x]) -> Z64<P> {
+                        let (x0, rest) = x.split_first().unwrap();
+                        let mut xs = [Zero::zero(); $y];
+                        xs.copy_from_slice(rest);
+                        self.coeff.iter().rev().fold(
+                            Zero::zero(),
+                            |acc, c| acc * x0 + c.eval(&xs)
+                        )
+                    }
+                }
+
+                impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<UniPolynomial $x>]<Z64<P>>
+                {
+                    type Output = FmtUniPoly<'a, 'b, [<UniPolynomial $y >]<Z64<P>>, S>;
+
+                    fn with_vars(&'a self, vars: &'b[S; $x]) -> Self::Output {
+                        FmtUniPoly::new(self, vars)
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_dense_poly!(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16);
+impl_dense_poly_recursive!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FmtUniPoly<'a, 'b, T: Display + One + Zero, V: Display> {
@@ -375,18 +489,6 @@ pub struct FmtUniPoly<'a, 'b, T: Display + One + Zero, V: Display> {
 impl<'a, 'b, T: Display + One + Zero, V: Display> FmtUniPoly<'a, 'b, T, V> {
     fn new(poly: &'a UniPolynomial<T>, var: &'b [V]) -> Self {
         Self { poly, var }
-    }
-}
-
-impl<const P: u64> Display for UniPolynomial<Z64<P>> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        FmtUniPoly::new(self, &["x"]).fmt(f)
-    }
-}
-
-impl<const P: u64> Display for UniPolynomial<UniPolynomial<Z64<P>>> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        FmtUniPoly::new(self, &["x", "y"]).fmt(f)
     }
 }
 
@@ -410,36 +512,5 @@ impl<'a, 'b, V: Display, const P: u64> Display for FmtUniPoly<'a, 'b, Z64<P>, V>
                 format!("{coeff}*{var}^{pow}")
             }
         }).join(" + "))
-    }
-}
-
-impl<'a, 'b, V: Display, const P: u64> Display for FmtUniPoly<'a, 'b, UniPolynomial<Z64<P>>, V> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.poly.coeff.is_empty() {
-            return write!(f, "0");
-        }
-        let coeff = self.poly.coeff.iter().enumerate().filter(|(_, c)| !c.is_zero());
-        let var = &self.var[0];
-        write!(f, "{}", coeff.map(|(pow, coeff)| {
-            let coeff = FmtUniPoly::new(coeff, &self.var[1..]);
-            match pow {
-                0 => format!("{coeff}"),
-                1 => if coeff.poly.is_one() {
-                    format!("{var}")
-                } else if coeff.poly.nterms() == 1 {
-                    format!("{coeff}*{var}")
-                } else {
-                    format!("({coeff})*{var}")
-                },
-                _ => if coeff.poly.is_one() {
-                    format!("{var}^{pow}")
-                } else if coeff.poly.nterms() == 1 {
-                    format!("{coeff}*{var}^{pow}")
-                } else {
-                    format!("({coeff})*{var}^{pow}")
-                }
-            }
-        }).join(" + ")
-        )
     }
 }

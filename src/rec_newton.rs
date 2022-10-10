@@ -3,8 +3,9 @@ use std::{ops::{Index, IndexMut}, fmt::{Display, self}, cmp::max};
 use galois_fields::Z64;
 use log::{debug, trace};
 use rand::{Rng, thread_rng};
+use paste::paste;
 
-use crate::{traits::{Zero, One}, rand::{UniqueRand, UniqueRandIter}, poly::{UniPolynomial2, UniPolynomial1}};
+use crate::{traits::{Zero, One, WithVars}, rand::{UniqueRand, UniqueRandIter}};
 use crate::{poly::UniPolynomial, traits::Eval};
 
 /// Univariate polynomial reconstruction using Newton interpolation
@@ -177,12 +178,6 @@ pub struct NewtonPolynomial<T, U = T> {
     val: Vec<U>,
 }
 
-pub type NewtonPolynomial1<T> = NewtonPolynomial<T>;
-pub type NewtonPolynomial2<T> = NewtonPolynomial<NewtonPolynomial<T>, T>;
-pub type NewtonPolynomial3<T> = NewtonPolynomial<NewtonPolynomial2<T>, T>;
-pub type NewtonPolynomial4<T> = NewtonPolynomial<NewtonPolynomial3<T>, T>;
-pub type NewtonPolynomial5<T> = NewtonPolynomial<NewtonPolynomial4<T>, T>;
-
 impl<T, U> NewtonPolynomial<T, U> {
     fn new() -> Self {
         NewtonPolynomial {coeff: Vec::new(), val: Vec::new()}
@@ -236,45 +231,6 @@ impl<const P: u64> From<&NewtonPolynomial<Z64<P>>> for UniPolynomial<Z64<P>> {
     }
 }
 
-impl<const P: u64> From<NewtonPolynomial<Z64<P>>> for UniPolynomial<Z64<P>> {
-    fn from(p: NewtonPolynomial<Z64<P>>) -> Self {
-        Self::from(&p)
-    }
-}
-
-impl<const P: u64> From<&NewtonPolynomial2<Z64<P>>> for UniPolynomial2<Z64<P>> {
-    fn from(p: &NewtonPolynomial2<Z64<P>>) -> Self {
-        debug!("convert to poly: {p}");
-        if p.coeff.is_empty() {
-            return Self::new()
-        }
-        debug_assert_eq!(p.coeff.len(), p.val.len() + 1);
-        let mut prod = Self::one();
-        let mut res = Self::new();
-        for (a, y) in p.coeff.iter().zip(p.val.iter()) {
-            let a = UniPolynomial::from(a);
-            let term = &prod * &a;
-            trace!("({prod}) * ({a}) = {term}");
-            res += term;
-            let my = UniPolynomial1::from_coeff_unchecked(vec![-*y]);
-            prod *= &Self::from_coeff_unchecked(vec![my, One::one()]);
-        }
-        if let Some(last) = p.coeff.last() {
-            let last = UniPolynomial::from(last);
-            let term = &prod * &last;
-            trace!("({prod}) * ({last}) = {term}");
-            res += term;
-        }
-        res
-    }
-}
-
-impl<const P: u64> From<NewtonPolynomial2<Z64<P>>> for UniPolynomial2<Z64<P>> {
-    fn from(p: NewtonPolynomial2<Z64<P>>) -> Self {
-        Self::from(&p)
-    }
-}
-
 impl<const P: u64> Eval<Z64<P>> for NewtonPolynomial<Z64<P>> {
     type Output = Z64<P>;
 
@@ -292,30 +248,12 @@ impl<const P: u64> Eval<Z64<P>> for NewtonPolynomial<Z64<P>> {
         }
     }
 }
-// TODO: macros?
+
 impl<const P: u64> Eval<[Z64<P>; 1]> for NewtonPolynomial<Z64<P>> {
     type Output = Z64<P>;
 
     fn eval(&self, x: &[Z64<P>; 1]) -> Z64<P> {
         self.eval(&x[0])
-    }
-}
-
-impl<const P: u64> Eval<[Z64<P>; 2]> for NewtonPolynomial2<Z64<P>> {
-    type Output = Z64<P>;
-
-    fn eval(&self, x: &[Z64<P>; 2]) -> Z64<P> {
-        if let Some((coeff, coeffs)) = self.coeff.split_first() {
-            let mut res = coeff.eval(&x[1]);
-            let mut prod: Z64<P> = One::one();
-            for (coeff, val) in coeffs.into_iter().zip(self.val.iter()) {
-                prod *= x[0] - val;
-                res += coeff.eval(&x[1]) * prod;
-            }
-            res
-        } else {
-            Zero::zero()
-        }
     }
 }
 
@@ -328,18 +266,6 @@ pub struct FmtNewtonPoly<'a, 'b, T: Display + One + Zero, U: Display + One + Zer
 impl<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display> FmtNewtonPoly<'a, 'b, T, U, V> {
     fn new(poly: &'a NewtonPolynomial<T, U>, var: &'b [V]) -> Self {
         Self { poly, var }
-    }
-}
-
-impl<const P: u64> Display for NewtonPolynomial<Z64<P>> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        FmtNewtonPoly::new(self, &["x"]).fmt(f)
-    }
-}
-
-impl<const P: u64> Display for NewtonPolynomial2<Z64<P>> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        FmtNewtonPoly::new(self, &["x", "y"]).fmt(f)
     }
 }
 
@@ -369,33 +295,148 @@ impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, Z64<P>,
     }
 }
 
-impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, NewtonPolynomial<Z64<P>>, Z64<P>, V> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let coeff = &self.poly.coeff;
-        let val = &self.poly.val;
-        let var = &self.var[0];
-        if let Some((first, rest)) = coeff.split_first() {
-            // debug_assert_eq!(coeff.len(), val.len() + 1);
-            write!(f, "{first}")?;
-            if let Some((last_coeff, rest)) = rest.split_last() {
-                write!(f, " + ")?;
-                let (last_pt, val) = val[..=rest.len()].split_last().unwrap();
-                for (coeff, pt) in rest.iter().zip(val.iter()) {
-                    let coeff = FmtNewtonPoly::new(coeff, &self.var[1..]);
-                    write!(f, "({var} - {pt})*(({coeff}) + ")?;
-                }
-                let last_coeff = FmtNewtonPoly::new(last_coeff, &self.var[1..]);
-                write!(f, "({var} - {last_pt})*({last_coeff})")?;
-                for _ in 0..rest.len() {
-                    write!(f, ")")?;
-                }
-            }
-            Ok(())
-        } else {
-            write!(f, "0")
-        }
+pub type NewtonPolynomial1<T> = NewtonPolynomial<T>;
+
+impl<'a, 'b, T, U, S: Display> WithVars<'a, &'b [S; 1]> for NewtonPolynomial<T, U>
+where
+    T: Display + One + Zero + 'a,
+    U: Display + One + Zero + 'a,
+{
+    type Output = FmtNewtonPoly<'a, 'b, T, U, S>;
+
+    fn with_vars(&'a self, vars: &'b[S; 1]) -> Self::Output {
+        FmtNewtonPoly::new(self, vars)
     }
 }
+
+macro_rules! impl_newton_poly {
+    ( $($x:literal), *) => {
+        $(
+            paste! {
+                use crate::poly::[<UniPolynomial $x>];
+
+                impl<const P: u64> Display for [<NewtonPolynomial $x>]<Z64<P>> {
+                    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                        const VARS: [&str; $x] = {
+                            let mut vars = [""; $x];
+                            let mut num = 0;
+                            while num < vars.len() {
+                                vars[num] = crate::poly::ALL_VARS[num];
+                                num += 1;
+                            }
+                            vars
+                        };
+                        self.with_vars(&VARS).fmt(f)
+                    }
+                }
+
+                impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, [<NewtonPolynomial $x>]<Z64<P>>, Z64<P>, V> {
+                    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                        let coeff = &self.poly.coeff;
+                        let val = &self.poly.val;
+                        let var = &self.var[0];
+                        if let Some((first, rest)) = coeff.split_first() {
+                            // debug_assert_eq!(coeff.len(), val.len() + 1);
+                            write!(f, "{first}")?;
+                            if let Some((last_coeff, rest)) = rest.split_last() {
+                                write!(f, " + ")?;
+                                let (last_pt, val) = val[..=rest.len()].split_last().unwrap();
+                                for (coeff, pt) in rest.iter().zip(val.iter()) {
+                                    let coeff = FmtNewtonPoly::new(coeff, &self.var[1..]);
+                                    write!(f, "({var} - {pt})*(({coeff}) + ")?;
+                                }
+                                let last_coeff = FmtNewtonPoly::new(last_coeff, &self.var[1..]);
+                                write!(f, "({var} - {last_pt})*({last_coeff})")?;
+                                for _ in 0..rest.len() {
+                                    write!(f, ")")?;
+                                }
+                            }
+                            Ok(())
+                        } else {
+                            write!(f, "0")
+                        }
+                    }
+                }
+
+                impl<const P: u64> From<[<NewtonPolynomial $x>]<Z64<P>>> for [<UniPolynomial $x>]<Z64<P>> {
+                    fn from(p: [<NewtonPolynomial $x>]<Z64<P>>) -> Self {
+                        Self::from(&p)
+                    }
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_newton_poly_recursive {
+    ( $($x:literal, $y:literal), * ) => {
+        $(
+            paste! {
+                pub type [<NewtonPolynomial $x>]<T> = NewtonPolynomial<[<NewtonPolynomial $y >]<T>, T>;
+
+                impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<NewtonPolynomial $x>]<Z64<P>>
+                {
+                    type Output = FmtNewtonPoly<'a, 'b, [<NewtonPolynomial $y >]<Z64<P>>, Z64<P>, S>;
+
+                    fn with_vars(&'a self, vars: &'b[S; $x]) -> Self::Output {
+                        FmtNewtonPoly::new(self, vars)
+                    }
+                }
+
+                impl<const P: u64> From<&[<NewtonPolynomial $x>]<Z64<P>>> for [<UniPolynomial $x>]<Z64<P>> {
+                    fn from(p: &[<NewtonPolynomial $x>]<Z64<P>>) -> Self {
+                        debug!("convert to poly: {p}");
+                        if p.coeff.is_empty() {
+                            return Self::new()
+                        }
+                        debug_assert_eq!(p.coeff.len(), p.val.len() + 1);
+                        let mut prod = Self::one();
+                        let mut res = Self::new();
+                        for (a, y) in p.coeff.iter().zip(p.val.iter()) {
+                            let a = UniPolynomial::from(a);
+                            let term = &prod * &a;
+                            trace!("({prod}) * ({a}) = {term}");
+                            res += term;
+                            let my = [<UniPolynomial $y>]::from(-*y);
+                            prod *= &Self::from_coeff_unchecked(vec![my, One::one()]);
+                        }
+                        if let Some(last) = p.coeff.last() {
+                            let last = UniPolynomial::from(last);
+                            let term = &prod * &last;
+                            trace!("({prod}) * ({last}) = {term}");
+                            res += term;
+                        }
+                        res
+                    }
+                }
+
+                impl<const P: u64> Eval<[Z64<P>; $x]> for [<NewtonPolynomial $x>]<Z64<P>> {
+                    type Output = Z64<P>;
+
+                    fn eval(&self, x: &[Z64<P>; $x]) -> Z64<P> {
+                        let (x0, rest) = x.split_first().unwrap();
+                        if let Some((coeff, coeffs)) = self.coeff.split_first() {
+                            let mut xs = [Z64::zero(); $y];
+                            xs.copy_from_slice(&rest);
+                            let mut res = coeff.eval(&xs);
+                            let mut prod: Z64<P> = One::one();
+                            for (coeff, val) in coeffs.into_iter().zip(self.val.iter()) {
+                                prod *= x0 - val;
+                                res += coeff.eval(&xs) * prod;
+                            }
+                            res
+                        } else {
+                            Zero::zero()
+                        }
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_newton_poly!(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16);
+impl_newton_poly_recursive!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
 
 #[cfg(test)]
 mod tests {
@@ -506,11 +547,8 @@ mod tests {
                 coeffs.push(poly);
             }
             let poly = UniPolynomial::from_coeff(coeffs);
-            eprintln!("original: {poly}");
             let reconstructed = rec.rec2_with_ran(|x, y| poly.eval(&[x, y]), &mut rng).unwrap();
-            eprintln!("{reconstructed}");
             let reconstructed: UniPolynomial2<Z64<P>> = reconstructed.into();
-            eprintln!("{reconstructed}");
             assert_eq!(poly, reconstructed)
         }
     }
