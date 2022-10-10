@@ -6,7 +6,7 @@ use rand::{Rng, thread_rng};
 use paste::paste;
 
 use crate::{traits::{Zero, One, WithVars, Rec}, rand::{UniqueRand, UniqueRandIter}};
-use crate::{poly::DensePoly, traits::Eval};
+use crate::{dense_poly::DensePoly, traits::Eval};
 
 /// Univariate polynomial reconstruction using Newton interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -306,7 +306,7 @@ macro_rules! impl_newton_poly {
     ( $($x:literal), *) => {
         $(
             paste! {
-                use crate::poly::[<DensePoly $x>];
+                use crate::dense_poly::[<DensePoly $x>];
 
                 impl<const P: u64> Display for [<NewtonPoly $x>]<Z64<P>> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -314,7 +314,7 @@ macro_rules! impl_newton_poly {
                             let mut vars = [""; $x];
                             let mut num = 0;
                             while num < vars.len() {
-                                vars[num] = crate::poly::ALL_VARS[num];
+                                vars[num] = crate::dense_poly::ALL_VARS[num];
                                 num += 1;
                             }
                             vars
