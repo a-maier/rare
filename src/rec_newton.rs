@@ -5,7 +5,7 @@ use log::{debug, trace};
 use rand::{Rng, thread_rng};
 use paste::paste;
 
-use crate::{traits::{Zero, One, WithVars}, rand::{UniqueRand, UniqueRandIter}};
+use crate::{traits::{Zero, One, WithVars, Rec}, rand::{UniqueRand, UniqueRandIter}};
 use crate::{poly::UniPolynomial, traits::Eval};
 
 /// Univariate polynomial reconstruction using Newton interpolation
@@ -88,42 +88,35 @@ impl NewtonRec {
     {
         self.rec_univariate_with_ran(poly, thread_rng())
     }
+}
 
-    pub fn rec2_with_ran<F, const P: u64>(
-        &self,
-        mut poly: F,
-        mut rng: impl Rng,
-    ) -> Option<NewtonPolynomial2<Z64<P>>>
-    where F: FnMut(Z64<P>, Z64<P>) -> Z64<P>
-    {
-        debug!("2d reconstruction");
-        let mut res: NewtonPolynomial2<Z64<P>> = Default::default();
-        let mut rand = UniqueRand::new();
-        while let Some(x1) = rand.try_gen(&mut rng) {
-            trace!("x1 = {x1}");
-            let prefact = res.val.iter().fold(
-                Z64::<P>::one(),
-                |p, pt| p * (x1 - pt)
-            );
-            let prefact = prefact.inv();
-            let a = self.rec1_with_ran(
-                |x2| prefact * (poly(x1, x2) - res.eval(&[x1, x2])),
-                &mut rng
-            );
-            if let Some(a) = a {
-                trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
-                res.add_term(a, x1);
-                trace!("Intermediate poly: {res}");
-                if res.coeff.iter().rev().take_while(|c| c.is_zero()).count() > self.extra_pts {
-                    res.coeff.truncate(res.coeff.len() - self.extra_pts - 1);
-                    res.val.truncate(max(res.coeff.len(), 1) - 1);
-                    return Some(res)
-                }
-            } else {
-                return None
-            };
-        }
-        None
+impl<F, const P: u64> Rec<NewtonRec, (Z64<P>,)> for F
+where F: FnMut(Z64<P>) -> Z64<P> {
+    type Output = Option<NewtonPolynomial1<Z64<P>>>;
+
+    fn rec_with_ran(
+        &mut self,
+        reconstructor: NewtonRec,
+        rng: impl Rng
+    ) -> Self::Output {
+        reconstructor.rec_from_seq(
+            UniqueRandIter::new(rng).map(|pt| (pt, (self)(pt)))
+        )
+    }
+}
+
+impl<F, const P: u64> Rec<NewtonRec, [Z64<P>; 1]> for F
+where F: FnMut([Z64<P>; 1]) -> Z64<P> {
+    type Output = Option<NewtonPolynomial1<Z64<P>>>;
+
+    fn rec_with_ran(
+        &mut self,
+        reconstructor: NewtonRec,
+        rng: impl Rng
+    ) -> Self::Output {
+        reconstructor.rec_from_seq(
+            UniqueRandIter::new(rng).map(|pt| (pt, (self)([pt])))
+        )
     }
 }
 
@@ -430,6 +423,53 @@ macro_rules! impl_newton_poly_recursive {
                         }
                     }
                 }
+
+                impl<F, const P: u64> Rec<NewtonRec, [Z64<P>; $x]> for F
+                where F: FnMut([Z64<P>; $x]) -> Z64<P> {
+                    type Output = Option<[<NewtonPolynomial $x>]<Z64<P>>>;
+
+                    fn rec_with_ran(
+                        &mut self,
+                        rec: NewtonRec,
+                        mut rng: impl Rng
+                    ) -> Self::Output {
+                        debug!("{}d reconstruction", $x);
+                        let mut res: [<NewtonPolynomial $x>]<Z64<P>> = Default::default();
+                        let mut rand = UniqueRand::new();
+                        while let Some(x1) = rand.try_gen(&mut rng) {
+                            trace!("x1 = {x1}");
+                            let prefact = res.val.iter().fold(
+                                Z64::<P>::one(),
+                                |p, pt| p * (x1 - pt)
+                            );
+                            let prefact = prefact.inv();
+                            let mut poly_rest = |xs: [Z64<P>; $y]| {
+                                let mut args = [x1; $x];
+                                args[1..].copy_from_slice(&xs);
+                                prefact * ((self)(args) - res.eval(&args))
+                            };
+                            let a = Rec::<NewtonRec, [Z64<P>; $y]>::rec_with_ran(
+                                &mut poly_rest,
+                                rec,
+                                &mut rng
+                            );
+                            if let Some(a) = a {
+                                //trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
+                                res.add_term(a, x1);
+                                trace!("Intermediate poly: {res}");
+                                if res.coeff.iter().rev().take_while(|c| c.is_zero()).count() > rec.extra_pts {
+                                    res.coeff.truncate(res.coeff.len() - rec.extra_pts - 1);
+                                    res.val.truncate(max(res.coeff.len(), 1) - 1);
+                                    return Some(res)
+                                }
+                            } else {
+                                return None
+                            };
+                        }
+                        None
+                    }
+                }
+
             }
         )*
     };
@@ -466,7 +506,7 @@ mod tests {
             let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
             let poly = UniPolynomial::from_coeff(coeff);
             eprintln!("{poly}");
-            let reconstructed = rec.rec_univariate_with_ran(|x| poly.eval(&x), &mut rng).unwrap();
+            let reconstructed = (|x: Z64<P>| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
             eprintln!("{reconstructed}");
             let reconstructed: UniPolynomial<Z64<P>> = reconstructed.into();
             eprintln!("{reconstructed}");
@@ -488,7 +528,7 @@ mod tests {
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
             let poly = UniPolynomial::from_coeff(coeff);
-            let reconstructed = rec.rec_univariate_with_ran(|x| poly.eval(&x), &mut rng).unwrap();
+            let reconstructed = (|x: Z64<P>| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
             let reconstructed: UniPolynomial<Z64<P>> = reconstructed.into();
             assert_eq!(poly, reconstructed)
         }
@@ -517,7 +557,9 @@ mod tests {
             }
             let poly = UniPolynomial::from_coeff(coeffs);
             eprintln!("original: {poly}");
-            let reconstructed = rec.rec2_with_ran(|x, y| poly.eval(&[x, y]), &mut rng).unwrap();
+            let reconstructed = (|x| poly.eval(&x))
+                .rec_with_ran(rec, &mut rng)
+                .unwrap();
             eprintln!("{reconstructed}");
             let reconstructed: UniPolynomial2<Z64<P>> = reconstructed.into();
             eprintln!("{reconstructed}");
@@ -547,10 +589,41 @@ mod tests {
                 coeffs.push(poly);
             }
             let poly = UniPolynomial::from_coeff(coeffs);
-            let reconstructed = rec.rec2_with_ran(|x, y| poly.eval(&[x, y]), &mut rng).unwrap();
+            let reconstructed = (|x| poly.eval(&x))
+                .rec_with_ran(rec, &mut rng)
+                .unwrap();
             let reconstructed: UniPolynomial2<Z64<P>> = reconstructed.into();
             assert_eq!(poly, reconstructed)
         }
+    }
+
+    #[test]
+    fn rec3_poly_small() {
+        log_init();
+
+        const P: u64 = 5;
+        let x1: UniPolynomial3<Z64<P>> = UniPolynomial3::from_coeff(
+            vec![UniPolynomial2::zero(), UniPolynomial2::one()]
+        );
+        let x2: UniPolynomial2<Z64<P>> = UniPolynomial::from_coeff(
+            vec![UniPolynomial::zero(), UniPolynomial::one()]
+        );
+        let x2: UniPolynomial3<Z64<P>> = UniPolynomial::from(x2);
+        let x3 = UniPolynomial::from_coeff(vec![Z64::zero(), Z64::one()]);
+        let x3: UniPolynomial2<_> = UniPolynomial::from(x3);
+        let x3: UniPolynomial3<Z64<P>> = UniPolynomial::from(x3);
+        let poly = x1 + x2 + x3;
+
+        eprintln!("original: {poly}");
+        let rec = NewtonRec::new(1);
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+        let reconstructed = (|x| poly.eval(&x))
+            .rec_with_ran(rec, &mut rng)
+            .unwrap();
+        eprintln!("{reconstructed}");
+        let reconstructed: UniPolynomial3<Z64<P>> = reconstructed.into();
+        eprintln!("{reconstructed}");
+        assert_eq!(poly, reconstructed)
     }
 
 }
