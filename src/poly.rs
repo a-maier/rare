@@ -7,11 +7,11 @@ use paste::paste;
 use crate::traits::{Zero, One, Eval, WithVars};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct UniPolynomial<T> {
+pub struct DensePoly<T> {
     coeff: Vec<T>
 }
 
-impl<T: Zero> UniPolynomial<T> {
+impl<T: Zero> DensePoly<T> {
     pub fn new() -> Self {
         Self { coeff: Vec::new() }
     }
@@ -61,7 +61,7 @@ impl<T: Zero> UniPolynomial<T> {
     }
 }
 
-impl<T: One + Eq> UniPolynomial<T> {
+impl<T: One + Eq> DensePoly<T> {
     pub fn is_one(&self) -> bool {
         match self.coeff.first() {
             Some(c) if c.is_one() => true,
@@ -70,7 +70,7 @@ impl<T: One + Eq> UniPolynomial<T> {
     }
 }
 
-impl<T: AddAssign + Zero> AddAssign for UniPolynomial<T> {
+impl<T: AddAssign + Zero> AddAssign for DensePoly<T> {
     fn add_assign(&mut self, mut rhs: Self) {
         if self.coeff.len() < rhs.coeff.len() {
             std::mem::swap(&mut self.coeff, &mut rhs.coeff)
@@ -82,7 +82,7 @@ impl<T: AddAssign + Zero> AddAssign for UniPolynomial<T> {
     }
 }
 
-impl<T: Zero> AddAssign<&UniPolynomial<T>> for UniPolynomial<T>
+impl<T: Zero> AddAssign<&DensePoly<T>> for DensePoly<T>
 where for<'a> T: AddAssign<&'a T>
 {
     fn add_assign(&mut self, rhs: &Self) {
@@ -96,7 +96,7 @@ where for<'a> T: AddAssign<&'a T>
     }
 }
 
-impl<T: SubAssign + Zero> SubAssign for UniPolynomial<T> {
+impl<T: SubAssign + Zero> SubAssign for DensePoly<T> {
     fn sub_assign(&mut self, mut rhs: Self) {
         if self.coeff.len() < rhs.coeff.len() {
             std::mem::swap(&mut self.coeff, &mut rhs.coeff)
@@ -108,7 +108,7 @@ impl<T: SubAssign + Zero> SubAssign for UniPolynomial<T> {
     }
 }
 
-impl<T: Zero> SubAssign<&UniPolynomial<T>> for UniPolynomial<T>
+impl<T: Zero> SubAssign<&DensePoly<T>> for DensePoly<T>
 where for<'a> T: SubAssign<&'a T>
 {
     fn sub_assign(&mut self, rhs: &Self) {
@@ -122,7 +122,7 @@ where for<'a> T: SubAssign<&'a T>
     }
 }
 
-impl<T: AddAssign + Zero> Add for UniPolynomial<T> {
+impl<T: AddAssign + Zero> Add for DensePoly<T> {
     type Output = Self;
 
     fn add(mut self, rhs: Self) -> Self::Output {
@@ -131,7 +131,7 @@ impl<T: AddAssign + Zero> Add for UniPolynomial<T> {
     }
 }
 
-impl<T: Zero> Add<&UniPolynomial<T>> for UniPolynomial<T>
+impl<T: Zero> Add<&DensePoly<T>> for DensePoly<T>
 where for<'a> T: AddAssign<&'a T>
 {
     type Output = Self;
@@ -142,18 +142,18 @@ where for<'a> T: AddAssign<&'a T>
     }
 }
 
-impl<T: Zero> Add<UniPolynomial<T>> for &UniPolynomial<T>
+impl<T: Zero> Add<DensePoly<T>> for &DensePoly<T>
 where for<'a> T: AddAssign<&'a T>
 {
     type Output = Self;
 
-    fn add(self, mut rhs: UniPolynomial<T>) -> Self::Output {
+    fn add(self, mut rhs: DensePoly<T>) -> Self::Output {
         rhs  += self;
         self
     }
 }
 
-impl<T: SubAssign + Zero> Sub for UniPolynomial<T> {
+impl<T: SubAssign + Zero> Sub for DensePoly<T> {
     type Output = Self;
 
     fn sub(mut self, rhs: Self) -> Self::Output {
@@ -162,7 +162,7 @@ impl<T: SubAssign + Zero> Sub for UniPolynomial<T> {
     }
 }
 
-impl<T: Zero> Sub<&UniPolynomial<T>> for UniPolynomial<T>
+impl<T: Zero> Sub<&DensePoly<T>> for DensePoly<T>
 where for<'a> T: SubAssign<&'a T>
 {
     type Output = Self;
@@ -173,14 +173,14 @@ where for<'a> T: SubAssign<&'a T>
     }
 }
 
-impl<'a, 'b, T: Zero> Mul<&'b UniPolynomial<T>> for &'a UniPolynomial<T>
+impl<'a, 'b, T: Zero> Mul<&'b DensePoly<T>> for &'a DensePoly<T>
 where
     for<'c> &'c T: Mul,
     for<'c> T: AddAssign<<&'c T as Mul>::Output>
 {
-    type Output = UniPolynomial<T>;
+    type Output = DensePoly<T>;
 
-    fn mul(self, rhs: &'b UniPolynomial<T>) -> Self::Output {
+    fn mul(self, rhs: &'b DensePoly<T>) -> Self::Output {
         let res_len = self.coeff.len() + rhs.coeff.len();
         let mut res = Vec::with_capacity(res_len);
         for n in 0..res_len {
@@ -196,43 +196,43 @@ where
     }
 }
 
-impl<T: Zero> Mul<&UniPolynomial<T>> for UniPolynomial<T>
+impl<T: Zero> Mul<&DensePoly<T>> for DensePoly<T>
 where
     for<'c> &'c T: Mul,
     for<'c> T: AddAssign<<&'c T as Mul>::Output>
 {
-    type Output = UniPolynomial<T>;
+    type Output = DensePoly<T>;
 
-    fn mul(self, rhs: &UniPolynomial<T>) -> Self::Output {
+    fn mul(self, rhs: &DensePoly<T>) -> Self::Output {
         &self * rhs
     }
 }
 
-impl<T: Zero> Mul<UniPolynomial<T>> for &UniPolynomial<T>
+impl<T: Zero> Mul<DensePoly<T>> for &DensePoly<T>
 where
     for<'c> &'c T: Mul,
     for<'c> T: AddAssign<<&'c T as Mul>::Output>
 {
-    type Output = UniPolynomial<T>;
+    type Output = DensePoly<T>;
 
-    fn mul(self, rhs: UniPolynomial<T>) -> Self::Output {
+    fn mul(self, rhs: DensePoly<T>) -> Self::Output {
         self * &rhs
     }
 }
 
-impl<T: Zero> Mul<UniPolynomial<T>> for UniPolynomial<T>
+impl<T: Zero> Mul<DensePoly<T>> for DensePoly<T>
 where
     for<'c> &'c T: Mul,
     for<'c> T: AddAssign<<&'c T as Mul>::Output>
 {
-    type Output = UniPolynomial<T>;
+    type Output = DensePoly<T>;
 
-    fn mul(self, rhs: UniPolynomial<T>) -> Self::Output {
+    fn mul(self, rhs: DensePoly<T>) -> Self::Output {
         &self * &rhs
     }
 }
 
-impl<T: Zero> MulAssign for UniPolynomial<T>
+impl<T: Zero> MulAssign for DensePoly<T>
 where
     for<'c> &'c T: Mul,
     for<'c> T: AddAssign<<&'c T as Mul>::Output>
@@ -242,7 +242,7 @@ where
     }
 }
 
-impl<T: Zero> MulAssign<&UniPolynomial<T>> for UniPolynomial<T>
+impl<T: Zero> MulAssign<&DensePoly<T>> for DensePoly<T>
 where
     for<'c> &'c T: Mul,
     for<'c> T: AddAssign<<&'c T as Mul>::Output>
@@ -252,7 +252,7 @@ where
     }
 }
 
-impl<T: Zero> MulAssign<&T> for UniPolynomial<T>
+impl<T: Zero> MulAssign<&T> for DensePoly<T>
 where for<'a> T: MulAssign<&'a T>
 {
     fn mul_assign(&mut self, rhs: &T) {
@@ -263,7 +263,7 @@ where for<'a> T: MulAssign<&'a T>
     }
 }
 
-impl<T: Zero> DivAssign<&T> for UniPolynomial<T>
+impl<T: Zero> DivAssign<&T> for DensePoly<T>
 where for<'a> T: DivAssign<&'a T>
 {
     fn div_assign(&mut self, rhs: &T) {
@@ -274,7 +274,7 @@ where for<'a> T: DivAssign<&'a T>
     }
 }
 
-impl<T: Zero> Mul<&T> for UniPolynomial<T>
+impl<T: Zero> Mul<&T> for DensePoly<T>
 where for<'a> T: MulAssign<&'a T>
 {
     type Output = Self;
@@ -285,17 +285,17 @@ where for<'a> T: MulAssign<&'a T>
     }
 }
 
-impl<'a, 'b, T: Zero + Clone> Mul<&'a T> for &'b UniPolynomial<T>
+impl<'a, 'b, T: Zero + Clone> Mul<&'a T> for &'b DensePoly<T>
 where for<'c> T: MulAssign<&'c T>
 {
-    type Output = UniPolynomial<T>;
+    type Output = DensePoly<T>;
 
     fn mul(self, rhs: &T) -> Self::Output {
         self.to_owned() * rhs
     }
 }
 
-impl<T: Zero> Div<&T> for UniPolynomial<T>
+impl<T: Zero> Div<&T> for DensePoly<T>
 where for<'a> T: DivAssign<&'a T>
 {
     type Output = Self;
@@ -306,7 +306,7 @@ where for<'a> T: DivAssign<&'a T>
     }
 }
 
-impl<T: Zero> Zero for UniPolynomial<T> {
+impl<T: Zero> Zero for DensePoly<T> {
     fn zero() -> Self {
         Self::new()
     }
@@ -316,7 +316,7 @@ impl<T: Zero> Zero for UniPolynomial<T> {
     }
 }
 
-impl<T: One> One for UniPolynomial<T> {
+impl<T: One> One for DensePoly<T> {
     fn one() -> Self {
         Self { coeff: vec![T::one()] }
     }
@@ -327,7 +327,7 @@ impl<T: One> One for UniPolynomial<T> {
     }
 }
 
-impl<T: Zero> From<T> for UniPolynomial<T> {
+impl<T: Zero> From<T> for DensePoly<T> {
     fn from(z: T) -> Self {
         if z.is_zero() {
             Self::zero()
@@ -337,7 +337,7 @@ impl<T: Zero> From<T> for UniPolynomial<T> {
     }
 }
 
-impl<const P: u64> Eval<Z64<P>> for UniPolynomial<Z64<P>> {
+impl<const P: u64> Eval<Z64<P>> for DensePoly<Z64<P>> {
     type Output = Z64<P>;
 
     fn eval(&self, x: &Z64<P>) -> Z64<P> {
@@ -348,7 +348,7 @@ impl<const P: u64> Eval<Z64<P>> for UniPolynomial<Z64<P>> {
     }
 }
 
-impl<const P: u64> Eval<[Z64<P>; 1]> for UniPolynomial<Z64<P>> {
+impl<const P: u64> Eval<[Z64<P>; 1]> for DensePoly<Z64<P>> {
     type Output = Z64<P>;
 
     fn eval(&self, x: &[Z64<P>; 1]) -> Z64<P> {
@@ -356,7 +356,7 @@ impl<const P: u64> Eval<[Z64<P>; 1]> for UniPolynomial<Z64<P>> {
     }
 }
 
-impl<'a, 'b, T, S: Display> WithVars<'a, &'b [S; 1]> for UniPolynomial<T>
+impl<'a, 'b, T, S: Display> WithVars<'a, &'b [S; 1]> for DensePoly<T>
 where
     T: Display + One + Zero + 'a,
 {
@@ -367,7 +367,7 @@ where
     }
 }
 
-pub type UniPolynomial1<T> = UniPolynomial<T>;
+pub type DensePoly1<T> = DensePoly<T>;
 
 macro_rules! count {
     () => {0usize};
@@ -382,7 +382,7 @@ macro_rules! impl_dense_poly {
 
         $(
             paste! {
-                impl<const P: u64> Display for [<UniPolynomial $x>]<Z64<P>> {
+                impl<const P: u64> Display for [<DensePoly $x>]<Z64<P>> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                         const VARS: [&str; $x] = {
                             let mut vars = [""; $x];
@@ -397,7 +397,7 @@ macro_rules! impl_dense_poly {
                     }
                 }
 
-                impl<'a, 'b, V: Display, const P: u64> Display for FmtUniPoly<'a, 'b, [<UniPolynomial $x>]<Z64<P>>, V> {
+                impl<'a, 'b, V: Display, const P: u64> Display for FmtUniPoly<'a, 'b, [<DensePoly $x>]<Z64<P>>, V> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                         if self.poly.coeff.is_empty() {
                             return write!(f, "0");
@@ -436,21 +436,21 @@ macro_rules! impl_dense_poly_recursive {
     ( $($x:literal, $y:literal), * ) => {
         $(
             paste! {
-                pub type [<UniPolynomial $x>]<T> = UniPolynomial<[<UniPolynomial $y>]<T>>;
+                pub type [<DensePoly $x>]<T> = DensePoly<[<DensePoly $y>]<T>>;
 
-                impl<const P: u64> From<Z64<P>> for [<UniPolynomial $x>]<Z64<P>> {
+                impl<const P: u64> From<Z64<P>> for [<DensePoly $x>]<Z64<P>> {
                     fn from(z: Z64<P>) -> Self {
                         if z.is_zero() {
                             Self::zero()
                         } else {
                             Self::from_coeff_unchecked(vec![
-                                [<UniPolynomial $y>]::from(z)
+                                [<DensePoly $y>]::from(z)
                             ])
                         }
                     }
                 }
 
-                impl<const P: u64> Eval<[Z64<P>; $x]> for [<UniPolynomial $x>]<Z64<P>> {
+                impl<const P: u64> Eval<[Z64<P>; $x]> for [<DensePoly $x>]<Z64<P>> {
                     type Output = Z64<P>;
 
                     fn eval(&self, x: &[Z64<P>; $x]) -> Z64<P> {
@@ -464,9 +464,9 @@ macro_rules! impl_dense_poly_recursive {
                     }
                 }
 
-                impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<UniPolynomial $x>]<Z64<P>>
+                impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<DensePoly $x>]<Z64<P>>
                 {
-                    type Output = FmtUniPoly<'a, 'b, [<UniPolynomial $y >]<Z64<P>>, S>;
+                    type Output = FmtUniPoly<'a, 'b, [<DensePoly $y >]<Z64<P>>, S>;
 
                     fn with_vars(&'a self, vars: &'b[S; $x]) -> Self::Output {
                         FmtUniPoly::new(self, vars)
@@ -482,12 +482,12 @@ impl_dense_poly_recursive!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FmtUniPoly<'a, 'b, T: Display + One + Zero, V: Display> {
-    poly: &'a UniPolynomial<T>,
+    poly: &'a DensePoly<T>,
     var: &'b[V],
 }
 
 impl<'a, 'b, T: Display + One + Zero, V: Display> FmtUniPoly<'a, 'b, T, V> {
-    fn new(poly: &'a UniPolynomial<T>, var: &'b [V]) -> Self {
+    fn new(poly: &'a DensePoly<T>, var: &'b [V]) -> Self {
         Self { poly, var }
     }
 }

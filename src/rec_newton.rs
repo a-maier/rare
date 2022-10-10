@@ -6,7 +6,7 @@ use rand::{Rng, thread_rng};
 use paste::paste;
 
 use crate::{traits::{Zero, One, WithVars, Rec}, rand::{UniqueRand, UniqueRandIter}};
-use crate::{poly::UniPolynomial, traits::Eval};
+use crate::{poly::DensePoly, traits::Eval};
 
 /// Univariate polynomial reconstruction using Newton interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -28,7 +28,7 @@ impl NewtonRec {
     pub fn rec_from_seq<I, const P: u64>(
         &self,
         pts: I
-    ) -> Option<NewtonPolynomial<Z64<P>>>
+    ) -> Option<NewtonPoly<Z64<P>>>
     where I: IntoIterator<Item = (Z64<P>, Z64<P>)>
     {
         debug!("1d reconstruction");
@@ -48,7 +48,7 @@ impl NewtonRec {
                 if last_coeffs.all(|d| a[(d, d)] == Zero::zero()) {
                     let coeff = Vec::from_iter((0..i - self.extra_pts).map(|c| a[(c, c)]));
                     y.truncate(max(coeff.len(), 1) - 1);
-                    return Some(NewtonPolynomial {
+                    return Some(NewtonPoly {
                         coeff,
                         val: y
                     })
@@ -62,7 +62,7 @@ impl NewtonRec {
         &self,
         poly: F,
         rng: impl Rng,
-    ) -> Option<NewtonPolynomial<Z64<P>>>
+    ) -> Option<NewtonPoly<Z64<P>>>
     where F: FnMut(Z64<P>) -> Z64<P>
     {
         self.rec1_with_ran(poly, rng)
@@ -72,7 +72,7 @@ impl NewtonRec {
         &self,
         mut poly: F,
         rng: impl Rng,
-    ) -> Option<NewtonPolynomial<Z64<P>>>
+    ) -> Option<NewtonPoly<Z64<P>>>
     where F: FnMut(Z64<P>) -> Z64<P>
     {
         self.rec_from_seq(
@@ -83,7 +83,7 @@ impl NewtonRec {
     pub fn rec_univariate<F, const P: u64>(
         &self,
         poly: F
-    ) -> Option<NewtonPolynomial<Z64<P>>>
+    ) -> Option<NewtonPoly<Z64<P>>>
     where F: FnMut(Z64<P>) -> Z64<P>
     {
         self.rec_univariate_with_ran(poly, thread_rng())
@@ -92,7 +92,7 @@ impl NewtonRec {
 
 impl<F, const P: u64> Rec<NewtonRec, (Z64<P>,)> for F
 where F: FnMut(Z64<P>) -> Z64<P> {
-    type Output = Option<NewtonPolynomial1<Z64<P>>>;
+    type Output = Option<NewtonPoly1<Z64<P>>>;
 
     fn rec_with_ran(
         &mut self,
@@ -107,7 +107,7 @@ where F: FnMut(Z64<P>) -> Z64<P> {
 
 impl<F, const P: u64> Rec<NewtonRec, [Z64<P>; 1]> for F
 where F: FnMut([Z64<P>; 1]) -> Z64<P> {
-    type Output = Option<NewtonPolynomial1<Z64<P>>>;
+    type Output = Option<NewtonPoly1<Z64<P>>>;
 
     fn rec_with_ran(
         &mut self,
@@ -166,25 +166,25 @@ fn row_start(nrow: usize) -> usize {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct NewtonPolynomial<T, U = T> {
+pub struct NewtonPoly<T, U = T> {
     coeff: Vec<T>,
     val: Vec<U>,
 }
 
-impl<T, U> NewtonPolynomial<T, U> {
+impl<T, U> NewtonPoly<T, U> {
     fn new() -> Self {
-        NewtonPolynomial {coeff: Vec::new(), val: Vec::new()}
+        NewtonPoly {coeff: Vec::new(), val: Vec::new()}
     }
 }
 
-impl<T, U> NewtonPolynomial<T, U> {
+impl<T, U> NewtonPoly<T, U> {
     fn add_term(&mut self, coeff: T, val: U) {
         self.coeff.push(coeff);
         self.val.push(val);
     }
 }
 
-impl<T: Zero, U> Zero for NewtonPolynomial<T, U> {
+impl<T: Zero, U> Zero for NewtonPoly<T, U> {
     fn zero() -> Self {
         Self::new()
     }
@@ -194,7 +194,7 @@ impl<T: Zero, U> Zero for NewtonPolynomial<T, U> {
     }
 }
 
-impl<T: One, U> One for NewtonPolynomial<T, U> {
+impl<T: One, U> One for NewtonPoly<T, U> {
     fn one() -> Self {
         Self::new()
     }
@@ -205,8 +205,8 @@ impl<T: One, U> One for NewtonPolynomial<T, U> {
     }
 }
 
-impl<const P: u64> From<&NewtonPolynomial<Z64<P>>> for UniPolynomial<Z64<P>> {
-    fn from(p: &NewtonPolynomial<Z64<P>>) -> Self {
+impl<const P: u64> From<&NewtonPoly<Z64<P>>> for DensePoly<Z64<P>> {
+    fn from(p: &NewtonPoly<Z64<P>>) -> Self {
         if p.coeff.is_empty() {
             return Self::new()
         }
@@ -224,7 +224,7 @@ impl<const P: u64> From<&NewtonPolynomial<Z64<P>>> for UniPolynomial<Z64<P>> {
     }
 }
 
-impl<const P: u64> Eval<Z64<P>> for NewtonPolynomial<Z64<P>> {
+impl<const P: u64> Eval<Z64<P>> for NewtonPoly<Z64<P>> {
     type Output = Z64<P>;
 
     fn eval(&self, x: &Z64<P>) -> Z64<P> {
@@ -242,7 +242,7 @@ impl<const P: u64> Eval<Z64<P>> for NewtonPolynomial<Z64<P>> {
     }
 }
 
-impl<const P: u64> Eval<[Z64<P>; 1]> for NewtonPolynomial<Z64<P>> {
+impl<const P: u64> Eval<[Z64<P>; 1]> for NewtonPoly<Z64<P>> {
     type Output = Z64<P>;
 
     fn eval(&self, x: &[Z64<P>; 1]) -> Z64<P> {
@@ -252,12 +252,12 @@ impl<const P: u64> Eval<[Z64<P>; 1]> for NewtonPolynomial<Z64<P>> {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FmtNewtonPoly<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display> {
-    poly: &'a NewtonPolynomial<T, U>,
+    poly: &'a NewtonPoly<T, U>,
     var: &'b [V],
 }
 
 impl<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display> FmtNewtonPoly<'a, 'b, T, U, V> {
-    fn new(poly: &'a NewtonPolynomial<T, U>, var: &'b [V]) -> Self {
+    fn new(poly: &'a NewtonPoly<T, U>, var: &'b [V]) -> Self {
         Self { poly, var }
     }
 }
@@ -288,9 +288,9 @@ impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, Z64<P>,
     }
 }
 
-pub type NewtonPolynomial1<T> = NewtonPolynomial<T>;
+pub type NewtonPoly1<T> = NewtonPoly<T>;
 
-impl<'a, 'b, T, U, S: Display> WithVars<'a, &'b [S; 1]> for NewtonPolynomial<T, U>
+impl<'a, 'b, T, U, S: Display> WithVars<'a, &'b [S; 1]> for NewtonPoly<T, U>
 where
     T: Display + One + Zero + 'a,
     U: Display + One + Zero + 'a,
@@ -306,9 +306,9 @@ macro_rules! impl_newton_poly {
     ( $($x:literal), *) => {
         $(
             paste! {
-                use crate::poly::[<UniPolynomial $x>];
+                use crate::poly::[<DensePoly $x>];
 
-                impl<const P: u64> Display for [<NewtonPolynomial $x>]<Z64<P>> {
+                impl<const P: u64> Display for [<NewtonPoly $x>]<Z64<P>> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                         const VARS: [&str; $x] = {
                             let mut vars = [""; $x];
@@ -323,7 +323,7 @@ macro_rules! impl_newton_poly {
                     }
                 }
 
-                impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, [<NewtonPolynomial $x>]<Z64<P>>, Z64<P>, V> {
+                impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, [<NewtonPoly $x>]<Z64<P>>, Z64<P>, V> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                         let coeff = &self.poly.coeff;
                         let val = &self.poly.val;
@@ -351,8 +351,8 @@ macro_rules! impl_newton_poly {
                     }
                 }
 
-                impl<const P: u64> From<[<NewtonPolynomial $x>]<Z64<P>>> for [<UniPolynomial $x>]<Z64<P>> {
-                    fn from(p: [<NewtonPolynomial $x>]<Z64<P>>) -> Self {
+                impl<const P: u64> From<[<NewtonPoly $x>]<Z64<P>>> for [<DensePoly $x>]<Z64<P>> {
+                    fn from(p: [<NewtonPoly $x>]<Z64<P>>) -> Self {
                         Self::from(&p)
                     }
                 }
@@ -365,19 +365,19 @@ macro_rules! impl_newton_poly_recursive {
     ( $($x:literal, $y:literal), * ) => {
         $(
             paste! {
-                pub type [<NewtonPolynomial $x>]<T> = NewtonPolynomial<[<NewtonPolynomial $y >]<T>, T>;
+                pub type [<NewtonPoly $x>]<T> = NewtonPoly<[<NewtonPoly $y >]<T>, T>;
 
-                impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<NewtonPolynomial $x>]<Z64<P>>
+                impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<NewtonPoly $x>]<Z64<P>>
                 {
-                    type Output = FmtNewtonPoly<'a, 'b, [<NewtonPolynomial $y >]<Z64<P>>, Z64<P>, S>;
+                    type Output = FmtNewtonPoly<'a, 'b, [<NewtonPoly $y >]<Z64<P>>, Z64<P>, S>;
 
                     fn with_vars(&'a self, vars: &'b[S; $x]) -> Self::Output {
                         FmtNewtonPoly::new(self, vars)
                     }
                 }
 
-                impl<const P: u64> From<&[<NewtonPolynomial $x>]<Z64<P>>> for [<UniPolynomial $x>]<Z64<P>> {
-                    fn from(p: &[<NewtonPolynomial $x>]<Z64<P>>) -> Self {
+                impl<const P: u64> From<&[<NewtonPoly $x>]<Z64<P>>> for [<DensePoly $x>]<Z64<P>> {
+                    fn from(p: &[<NewtonPoly $x>]<Z64<P>>) -> Self {
                         debug!("convert to poly: {p}");
                         if p.coeff.is_empty() {
                             return Self::new()
@@ -386,15 +386,15 @@ macro_rules! impl_newton_poly_recursive {
                         let mut prod = Self::one();
                         let mut res = Self::new();
                         for (a, y) in p.coeff.iter().zip(p.val.iter()) {
-                            let a = UniPolynomial::from(a);
+                            let a = DensePoly::from(a);
                             let term = &prod * &a;
                             trace!("({prod}) * ({}) = {term}", Self::from(a));
                             res += term;
-                            let my = [<UniPolynomial $y>]::from(-*y);
+                            let my = [<DensePoly $y>]::from(-*y);
                             prod *= &Self::from_coeff_unchecked(vec![my, One::one()]);
                         }
                         if let Some(last) = p.coeff.last() {
-                            let last = UniPolynomial::from(last);
+                            let last = DensePoly::from(last);
                             let term = &prod * &last;
                             trace!("({prod}) * ({}) = {term}", Self::from(last));
                             res += term;
@@ -403,7 +403,7 @@ macro_rules! impl_newton_poly_recursive {
                     }
                 }
 
-                impl<const P: u64> Eval<[Z64<P>; $x]> for [<NewtonPolynomial $x>]<Z64<P>> {
+                impl<const P: u64> Eval<[Z64<P>; $x]> for [<NewtonPoly $x>]<Z64<P>> {
                     type Output = Z64<P>;
 
                     fn eval(&self, x: &[Z64<P>; $x]) -> Z64<P> {
@@ -426,7 +426,7 @@ macro_rules! impl_newton_poly_recursive {
 
                 impl<F, const P: u64> Rec<NewtonRec, [Z64<P>; $x]> for F
                 where F: FnMut([Z64<P>; $x]) -> Z64<P> {
-                    type Output = Option<[<NewtonPolynomial $x>]<Z64<P>>>;
+                    type Output = Option<[<NewtonPoly $x>]<Z64<P>>>;
 
                     fn rec_with_ran(
                         &mut self,
@@ -434,7 +434,7 @@ macro_rules! impl_newton_poly_recursive {
                         mut rng: impl Rng
                     ) -> Self::Output {
                         debug!("{}d reconstruction", $x);
-                        let mut res: [<NewtonPolynomial $x>]<Z64<P>> = Default::default();
+                        let mut res: [<NewtonPoly $x>]<Z64<P>> = Default::default();
                         let mut rand = UniqueRand::new();
                         while let Some(x1) = rand.try_gen(&mut rng) {
                             trace!("x1 = {x1}");
@@ -504,11 +504,11 @@ mod tests {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-            let poly = UniPolynomial::from_coeff(coeff);
+            let poly = DensePoly::from_coeff(coeff);
             eprintln!("{poly}");
             let reconstructed = (|x: Z64<P>| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
             eprintln!("{reconstructed}");
-            let reconstructed: UniPolynomial<Z64<P>> = reconstructed.into();
+            let reconstructed: DensePoly<Z64<P>> = reconstructed.into();
             eprintln!("{reconstructed}");
             assert_eq!(poly, reconstructed)
         }
@@ -527,9 +527,9 @@ mod tests {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-            let poly = UniPolynomial::from_coeff(coeff);
+            let poly = DensePoly::from_coeff(coeff);
             let reconstructed = (|x: Z64<P>| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
-            let reconstructed: UniPolynomial<Z64<P>> = reconstructed.into();
+            let reconstructed: DensePoly<Z64<P>> = reconstructed.into();
             assert_eq!(poly, reconstructed)
         }
     }
@@ -552,16 +552,16 @@ mod tests {
                 let max_pow = rng.gen_range(0..=MAX_POW);
                 let nterms = 2usize.pow(max_pow);
                 let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-                let poly = UniPolynomial::from_coeff(coeff);
+                let poly = DensePoly::from_coeff(coeff);
                 coeffs.push(poly);
             }
-            let poly = UniPolynomial::from_coeff(coeffs);
+            let poly = DensePoly::from_coeff(coeffs);
             eprintln!("original: {poly}");
             let reconstructed = (|x| poly.eval(&x))
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
             eprintln!("{reconstructed}");
-            let reconstructed: UniPolynomial2<Z64<P>> = reconstructed.into();
+            let reconstructed: DensePoly2<Z64<P>> = reconstructed.into();
             eprintln!("{reconstructed}");
             assert_eq!(poly, reconstructed)
         }
@@ -585,14 +585,14 @@ mod tests {
                 let max_pow = rng.gen_range(0..=MAX_POW);
                 let nterms = 2usize.pow(max_pow);
                 let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-                let poly = UniPolynomial::from_coeff(coeff);
+                let poly = DensePoly::from_coeff(coeff);
                 coeffs.push(poly);
             }
-            let poly = UniPolynomial::from_coeff(coeffs);
+            let poly = DensePoly::from_coeff(coeffs);
             let reconstructed = (|x| poly.eval(&x))
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
-            let reconstructed: UniPolynomial2<Z64<P>> = reconstructed.into();
+            let reconstructed: DensePoly2<Z64<P>> = reconstructed.into();
             assert_eq!(poly, reconstructed)
         }
     }
@@ -602,16 +602,16 @@ mod tests {
         log_init();
 
         const P: u64 = 5;
-        let x1: UniPolynomial3<Z64<P>> = UniPolynomial3::from_coeff(
-            vec![UniPolynomial2::zero(), UniPolynomial2::one()]
+        let x1: DensePoly3<Z64<P>> = DensePoly3::from_coeff(
+            vec![DensePoly2::zero(), DensePoly2::one()]
         );
-        let x2: UniPolynomial2<Z64<P>> = UniPolynomial::from_coeff(
-            vec![UniPolynomial::zero(), UniPolynomial::one()]
+        let x2: DensePoly2<Z64<P>> = DensePoly::from_coeff(
+            vec![DensePoly::zero(), DensePoly::one()]
         );
-        let x2: UniPolynomial3<Z64<P>> = UniPolynomial::from(x2);
-        let x3 = UniPolynomial::from_coeff(vec![Z64::zero(), Z64::one()]);
-        let x3: UniPolynomial2<_> = UniPolynomial::from(x3);
-        let x3: UniPolynomial3<Z64<P>> = UniPolynomial::from(x3);
+        let x2: DensePoly3<Z64<P>> = DensePoly::from(x2);
+        let x3 = DensePoly::from_coeff(vec![Z64::zero(), Z64::one()]);
+        let x3: DensePoly2<_> = DensePoly::from(x3);
+        let x3: DensePoly3<Z64<P>> = DensePoly::from(x3);
         let poly = x1 + x2 + x3;
 
         eprintln!("original: {poly}");
@@ -621,7 +621,7 @@ mod tests {
             .rec_with_ran(rec, &mut rng)
             .unwrap();
         eprintln!("{reconstructed}");
-        let reconstructed: UniPolynomial3<Z64<P>> = reconstructed.into();
+        let reconstructed: DensePoly3<Z64<P>> = reconstructed.into();
         eprintln!("{reconstructed}");
         assert_eq!(poly, reconstructed)
     }
