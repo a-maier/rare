@@ -23,6 +23,7 @@ impl<T: Zero> DensePoly<T> {
     }
 
     pub fn from_coeff_unchecked(coeff: Vec<T>) -> Self {
+        debug_assert!(!matches!(coeff.last(), Some(c) if c.is_zero()));
         Self { coeff }
     }
 
