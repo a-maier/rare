@@ -11,20 +11,9 @@ pub struct DensePoly<T> {
     coeff: Vec<T>
 }
 
-impl<T: Zero> DensePoly<T> {
+impl<T> DensePoly<T> {
     pub fn new() -> Self {
         Self { coeff: Vec::new() }
-    }
-
-    pub fn from_coeff(coeff: Vec<T>) -> Self {
-        let mut res = Self { coeff };
-        res.delete_trailing_zeroes();
-        res
-    }
-
-    pub fn from_coeff_unchecked(coeff: Vec<T>) -> Self {
-        debug_assert!(!matches!(coeff.last(), Some(c) if c.is_zero()));
-        Self { coeff }
     }
 
     pub fn into_coeff(self) -> Vec<T> {
@@ -37,6 +26,19 @@ impl<T: Zero> DensePoly<T> {
         } else {
             Some(self.coeff.len() - 1)
         }
+    }
+}
+
+impl<T: Zero> DensePoly<T> {
+    pub fn from_coeff(coeff: Vec<T>) -> Self {
+        let mut res = Self { coeff };
+        res.delete_trailing_zeroes();
+        res
+    }
+
+    pub fn from_coeff_unchecked(coeff: Vec<T>) -> Self {
+        debug_assert!(!matches!(coeff.last(), Some(c) if c.is_zero()));
+        Self { coeff }
     }
 
     pub fn nterms(&self) -> usize {
@@ -298,7 +300,7 @@ where for<'a> T: DivAssign<&'a T>
     }
 }
 
-impl<T: Zero> Zero for DensePoly<T> {
+impl<T> Zero for DensePoly<T> {
     fn zero() -> Self {
         Self::new()
     }
