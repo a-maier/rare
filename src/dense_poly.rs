@@ -62,15 +62,6 @@ impl<T: Zero> DensePoly<T> {
     }
 }
 
-impl<T: One + Eq> DensePoly<T> {
-    pub fn is_one(&self) -> bool {
-        match self.coeff.first() {
-            Some(c) if c.is_one() => true,
-            _ => false
-        }
-    }
-}
-
 impl<T: AddAssign + Zero> AddAssign for DensePoly<T> {
     fn add_assign(&mut self, mut rhs: Self) {
         if self.coeff.len() < rhs.coeff.len() {
