@@ -40,17 +40,20 @@ impl NewtonRec {
             y.push(pt);
             a.add_zero_row();
             a[(i, 0)] = val;
+            // TODO: too many divisions
             for j in 1..=i {
                 a[(i,j)] = (a[(i,j-1)] - a[(j-1,j-1)]) / (y[i] - y[j-1]);
             }
             if y.len() > self.extra_pts {
                 let mut last_coeffs = (i - self.extra_pts)..=i;
-                if last_coeffs.all(|d| a[(d, d)] == Zero::zero()) {
-                    let coeff = Vec::from_iter((0..i - self.extra_pts).map(|c| a[(c, c)]));
-                    y.truncate(max(coeff.len(), 1) - 1);
+                if last_coeffs.all(|d| a[(d, d)].is_zero()) {
+                    let mut coeff = Vec::from_iter((0..i - self.extra_pts).map(|c| a[(c, c)]));
+                    let last_val = coeff.pop().unwrap_or_default();
+                    y.truncate(coeff.len());
+                    let coeffs = coeff.into_iter().zip(y.into_iter()).collect();
                     return Some(NewtonPoly {
-                        coeff,
-                        val: y
+                        last_val,
+                        coeffs
                     })
                 }
             }
@@ -167,60 +170,51 @@ fn row_start(nrow: usize) -> usize {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct NewtonPoly<T, U = T> {
-    coeff: Vec<T>,
-    val: Vec<U>,
-}
-
-impl<T, U> NewtonPoly<T, U> {
-    fn new() -> Self {
-        NewtonPoly {coeff: Vec::new(), val: Vec::new()}
-    }
-}
-
-impl<T, U> NewtonPoly<T, U> {
-    fn add_term(&mut self, coeff: T, val: U) {
-        self.coeff.push(coeff);
-        self.val.push(val);
-    }
+    last_val: T,
+    coeffs: Vec<(T, U)>,
 }
 
 impl<T: Zero, U> Zero for NewtonPoly<T, U> {
     fn zero() -> Self {
-        Self::new()
+        Self {
+            last_val: Zero::zero(),
+            coeffs: Vec::new()
+        }
     }
 
     fn is_zero(&self) -> bool {
-        self.coeff.is_empty()
+        self.coeffs.is_empty() && self.last_val.is_zero()
     }
 }
 
 impl<T: One, U> One for NewtonPoly<T, U> {
     fn one() -> Self {
-        Self::new()
+        Self {
+            last_val: One::one(),
+            coeffs: Vec::new()
+        }
     }
 
     fn is_one(&self) -> bool {
-        self.coeff.len() == 1
-            && self.coeff[0].is_one()
+        self.coeffs.is_empty() && self.last_val.is_one()
+    }
+}
+
+impl<T, U> NewtonPoly<T, U> {
+    fn is_const(&self) -> bool {
+        self.coeffs.is_empty()
     }
 }
 
 impl<const P: u64> From<&NewtonPoly<Z64<P>>> for DensePoly<Z64<P>> {
     fn from(p: &NewtonPoly<Z64<P>>) -> Self {
-        if p.coeff.is_empty() {
-            return Self::new()
-        }
-        debug_assert_eq!(p.coeff.len(), p.val.len() + 1);
+        let mut res = Self::zero();
         let mut prod = Self::one();
-        let mut res = Self::new();
-        for (a, y) in p.coeff.iter().zip(p.val.iter()) {
+        for (a, y) in &p.coeffs {
             res += &prod * a;
             prod *= Self::from_coeff_unchecked(vec![-*y, One::one()]);
         }
-        if let Some(last) = p.coeff.last() {
-            res += &prod * last;
-        }
-        res
+        res + &prod * &p.last_val
     }
 }
 
@@ -228,17 +222,13 @@ impl<const P: u64> Eval<Z64<P>> for NewtonPoly<Z64<P>> {
     type Output = Z64<P>;
 
     fn eval(&self, x: &Z64<P>) -> Z64<P> {
-        if let Some((coeff, coeffs)) = self.coeff.split_first() {
-            let mut res = *coeff;
-            let mut prod = One::one();
-            for (coeff, val) in coeffs.into_iter().zip(self.val.iter()) {
-                prod *= x - val;
-                res += coeff * &prod;
-            }
-            res
-        } else {
-            Zero::zero()
+        let mut res = Z64::zero();
+        let mut prod = Z64::one();
+        for (a, y) in &self.coeffs {
+            res += prod * a;
+            prod *= x - y;
         }
+        res + prod * self.last_val
     }
 }
 
@@ -264,27 +254,15 @@ impl<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display> FmtNe
 
 impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, Z64<P>, Z64<P>, V> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let coeff = &self.poly.coeff;
-        let val = &self.poly.val;
         let var = &self.var[0];
-        if let Some((first, rest)) = coeff.split_first() {
-            debug_assert_eq!(coeff.len(), val.len() + 1);
-            write!(f, "{first}")?;
-            if let Some((last_coeff, rest)) = rest.split_last() {
-                write!(f, " + ")?;
-                let (last_pt, pts) = val.split_last().unwrap();
-                for (coeff, pt) in rest.iter().zip(pts.iter()) {
-                    write!(f, "({var} - {pt})*({coeff} + ")?;
-                }
-                write!(f, "({var} - {last_pt})*{last_coeff}")?;
-                for _ in 0..rest.len() {
-                    write!(f, ")")?;
-                }
-            }
-            Ok(())
-        } else {
-            write!(f, "0")
+        for (a, y) in &self.poly.coeffs {
+            write!(f, "{a} + ({var} - {y}) * (")?;
         }
+        write!(f, "{}", self.poly.last_val)?;
+        for _ in 0..self.poly.coeffs.len() {
+            write!(f, ")")?;
+        }
+        Ok(())
     }
 }
 
@@ -325,29 +303,17 @@ macro_rules! impl_newton_poly {
 
                 impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, [<NewtonPoly $x>]<Z64<P>>, Z64<P>, V> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                        let coeff = &self.poly.coeff;
-                        let val = &self.poly.val;
                         let var = &self.var[0];
-                        if let Some((first, rest)) = coeff.split_first() {
-                            // debug_assert_eq!(coeff.len(), val.len() + 1);
-                            write!(f, "{first}")?;
-                            if let Some((last_coeff, rest)) = rest.split_last() {
-                                write!(f, " + ")?;
-                                let (last_pt, val) = val[..=rest.len()].split_last().unwrap();
-                                for (coeff, pt) in rest.iter().zip(val.iter()) {
-                                    let coeff = FmtNewtonPoly::new(coeff, &self.var[1..]);
-                                    write!(f, "({var} - {pt})*(({coeff}) + ")?;
-                                }
-                                let last_coeff = FmtNewtonPoly::new(last_coeff, &self.var[1..]);
-                                write!(f, "({var} - {last_pt})*({last_coeff})")?;
-                                for _ in 0..rest.len() {
-                                    write!(f, ")")?;
-                                }
-                            }
-                            Ok(())
-                        } else {
-                            write!(f, "0")
+                        for (a, y) in &self.poly.coeffs {
+                            let coeff = FmtNewtonPoly::new(a, &self.var[1..]);
+                            write!(f, "{coeff} + ({var} - {y}) * (")?;
                         }
+                        let coeff = FmtNewtonPoly::new(&self.poly.last_val, &self.var[1..]);
+                        write!(f, "{coeff}")?;
+                        for _ in 0..self.poly.coeffs.len() {
+                            write!(f, ")")?;
+                        }
+                        Ok(())
                     }
                 }
 
@@ -379,27 +345,15 @@ macro_rules! impl_newton_poly_recursive {
                 impl<const P: u64> From<&[<NewtonPoly $x>]<Z64<P>>> for [<DensePoly $x>]<Z64<P>> {
                     fn from(p: &[<NewtonPoly $x>]<Z64<P>>) -> Self {
                         debug!("convert to poly: {p}");
-                        if p.coeff.is_empty() {
-                            return Self::new()
-                        }
-                        debug_assert_eq!(p.coeff.len(), p.val.len() + 1);
+
+                        let mut res = Self::zero();
                         let mut prod = Self::one();
-                        let mut res = Self::new();
-                        for (a, y) in p.coeff.iter().zip(p.val.iter()) {
-                            let a = DensePoly::from(a);
-                            let term = &prod * &a;
-                            trace!("({prod}) * ({}) = {term}", Self::from(a));
-                            res += term;
+                        for (a, y) in &p.coeffs {
+                            res += &prod * &DensePoly::from(a);
                             let my = [<DensePoly $y>]::from(-*y);
                             prod *= &Self::from_coeff_unchecked(vec![my, One::one()]);
                         }
-                        if let Some(last) = p.coeff.last() {
-                            let last = DensePoly::from(last);
-                            let term = &prod * &last;
-                            trace!("({prod}) * ({}) = {term}", Self::from(last));
-                            res += term;
-                        }
-                        res
+                        res + &prod * &DensePoly::from(&p.last_val)
                     }
                 }
 
@@ -407,20 +361,18 @@ macro_rules! impl_newton_poly_recursive {
                     type Output = Z64<P>;
 
                     fn eval(&self, x: &[Z64<P>; $x]) -> Z64<P> {
+                        // TODO: better split_first operating on arrays
                         let (x0, rest) = x.split_first().unwrap();
-                        if let Some((coeff, coeffs)) = self.coeff.split_first() {
-                            let mut xs = [Z64::zero(); $y];
-                            xs.copy_from_slice(&rest);
-                            let mut res = coeff.eval(&xs);
-                            let mut prod: Z64<P> = One::one();
-                            for (coeff, val) in coeffs.into_iter().zip(self.val.iter()) {
-                                prod *= x0 - val;
-                                res += coeff.eval(&xs) * prod;
-                            }
-                            res
-                        } else {
-                            Zero::zero()
+                        let mut xs = [Z64::zero(); $y];
+                        xs.copy_from_slice(&rest);
+
+                        let mut res = Z64::zero();
+                        let mut prod = Z64::one();
+                        for (a, y) in &self.coeffs {
+                            res += prod * a.eval(&xs);
+                            prod *= x0 - y;
                         }
+                        res + prod * self.last_val.eval(&xs)
                     }
                 }
 
@@ -438,9 +390,9 @@ macro_rules! impl_newton_poly_recursive {
                         let mut rand = UniqueRand::new();
                         while let Some(x1) = rand.try_gen(&mut rng) {
                             trace!("x1 = {x1}");
-                            let prefact = res.val.iter().fold(
+                            let prefact = res.coeffs.iter().fold(
                                 Z64::<P>::one(),
-                                |p, pt| p * (x1 - pt)
+                                |p, pt| p * (x1 - pt.1)
                             );
                             let prefact = prefact.inv();
                             let mut poly_rest = |xs: [Z64<P>; $y]| {
@@ -454,12 +406,15 @@ macro_rules! impl_newton_poly_recursive {
                                 &mut rng
                             );
                             if let Some(a) = a {
-                                //trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
-                                res.add_term(a, x1);
+                                trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
+                                res.coeffs.push((a, x1));
                                 trace!("Intermediate poly: {res}");
-                                if res.coeff.iter().rev().take_while(|c| c.is_zero()).count() > rec.extra_pts {
-                                    res.coeff.truncate(res.coeff.len() - rec.extra_pts - 1);
-                                    res.val.truncate(max(res.coeff.len(), 1) - 1);
+                                let trailing_zeroes = res.coeffs.iter().rev().take_while(|(c, _)| c.is_zero()).count();
+                                if trailing_zeroes > rec.extra_pts {
+                                    res.coeffs.truncate(res.coeffs.len() - trailing_zeroes);
+                                    if let Some((a, _y)) = res.coeffs.pop() {
+                                        res.last_val = a;
+                                    }
                                     return Some(res)
                                 }
                             } else {
