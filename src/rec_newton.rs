@@ -48,11 +48,11 @@ impl NewtonRec {
                 let mut last_coeffs = (i - self.extra_pts)..=i;
                 if last_coeffs.all(|d| a[(d, d)].is_zero()) {
                     let mut coeff = Vec::from_iter((0..i - self.extra_pts).map(|c| a[(c, c)]));
-                    let last_val = coeff.pop().unwrap_or_default();
+                    let a_last = coeff.pop().unwrap_or_default();
                     y.truncate(coeff.len());
                     let coeffs = coeff.into_iter().zip(y.into_iter()).collect();
                     return Some(NewtonPoly {
-                        last_val,
+                        a_last,
                         coeffs
                     })
                 }
@@ -170,33 +170,33 @@ fn row_start(nrow: usize) -> usize {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct NewtonPoly<T, U = T> {
-    last_val: T,
+    a_last: T,
     coeffs: Vec<(T, U)>,
 }
 
 impl<T: Zero, U> Zero for NewtonPoly<T, U> {
     fn zero() -> Self {
         Self {
-            last_val: Zero::zero(),
+            a_last: Zero::zero(),
             coeffs: Vec::new()
         }
     }
 
     fn is_zero(&self) -> bool {
-        self.coeffs.is_empty() && self.last_val.is_zero()
+        self.coeffs.is_empty() && self.a_last.is_zero()
     }
 }
 
 impl<T: One, U> One for NewtonPoly<T, U> {
     fn one() -> Self {
         Self {
-            last_val: One::one(),
+            a_last: One::one(),
             coeffs: Vec::new()
         }
     }
 
     fn is_one(&self) -> bool {
-        self.coeffs.is_empty() && self.last_val.is_one()
+        self.coeffs.is_empty() && self.a_last.is_one()
     }
 }
 
@@ -214,7 +214,7 @@ impl<const P: u64> From<&NewtonPoly<Z64<P>>> for DensePoly<Z64<P>> {
             res += &prod * a;
             prod *= Self::from_coeff_unchecked(vec![-*y, One::one()]);
         }
-        res + &prod * &p.last_val
+        res + &prod * &p.a_last
     }
 }
 
@@ -228,7 +228,7 @@ impl<const P: u64> Eval<Z64<P>> for NewtonPoly<Z64<P>> {
             res += prod * a;
             prod *= x - y;
         }
-        res + prod * self.last_val
+        res + prod * self.a_last
     }
 }
 
@@ -258,7 +258,7 @@ impl<'a, 'b, V: Display, const P: u64> Display for FmtNewtonPoly<'a, 'b, Z64<P>,
         for (a, y) in &self.poly.coeffs {
             write!(f, "{a} + ({var} - {y}) * (")?;
         }
-        write!(f, "{}", self.poly.last_val)?;
+        write!(f, "{}", self.poly.a_last)?;
         for _ in 0..self.poly.coeffs.len() {
             write!(f, ")")?;
         }
@@ -308,7 +308,7 @@ macro_rules! impl_newton_poly {
                             let coeff = FmtNewtonPoly::new(a, &self.var[1..]);
                             write!(f, "{coeff} + ({var} - {y}) * (")?;
                         }
-                        let coeff = FmtNewtonPoly::new(&self.poly.last_val, &self.var[1..]);
+                        let coeff = FmtNewtonPoly::new(&self.poly.a_last, &self.var[1..]);
                         write!(f, "{coeff}")?;
                         for _ in 0..self.poly.coeffs.len() {
                             write!(f, ")")?;
@@ -353,7 +353,7 @@ macro_rules! impl_newton_poly_recursive {
                             let my = [<DensePoly $y>]::from(-*y);
                             prod *= &Self::from_coeff_unchecked(vec![my, One::one()]);
                         }
-                        res + &prod * &DensePoly::from(&p.last_val)
+                        res + &prod * &DensePoly::from(&p.a_last)
                     }
                 }
 
@@ -372,7 +372,7 @@ macro_rules! impl_newton_poly_recursive {
                             res += prod * a.eval(&xs);
                             prod *= x0 - y;
                         }
-                        res + prod * self.last_val.eval(&xs)
+                        res + prod * self.a_last.eval(&xs)
                     }
                 }
 
@@ -413,7 +413,7 @@ macro_rules! impl_newton_poly_recursive {
                                 if trailing_zeroes > rec.extra_pts {
                                     res.coeffs.truncate(res.coeffs.len() - trailing_zeroes);
                                     if let Some((a, _y)) = res.coeffs.pop() {
-                                        res.last_val = a;
+                                        res.a_last = a;
                                     }
                                     return Some(res)
                                 }
