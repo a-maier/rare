@@ -1,4 +1,4 @@
-use std::{ops::{Index, IndexMut}, fmt::{Display, self}, cmp::max};
+use std::fmt::{Display, self};
 
 use galois_fields::Z64;
 use log::{debug, trace};
@@ -31,33 +31,41 @@ impl NewtonRec {
     ) -> Option<NewtonPoly<Z64<P>>>
     where I: IntoIterator<Item = (Z64<P>, Z64<P>)>
     {
-        debug!("1d reconstruction");
-        let mut a = TriangleMatrix::with_row_capacity(self.extra_pts + 1);
-        let mut y = Vec::with_capacity(self.extra_pts + 1);
-        for (pt, val) in pts.into_iter() {
-            trace!("Point ({pt}, {val})");
-            let i = a.nrows();
-            y.push(pt);
-            a.add_zero_row();
-            a[(i, 0)] = val;
-            // TODO: too many divisions
-            for j in 1..=i {
-                a[(i,j)] = (a[(i,j-1)] - a[(j-1,j-1)]) / (y[i] - y[j-1]);
+        debug!("1d polynomial reconstruction");
+        let mut pts = pts.into_iter();
+        let Some((y0, a0)) = pts.next() else {
+            return None
+        };
+        trace!("Adding p({y0}) = {a0}");
+        let mut poly = NewtonPoly::from(a0);
+        trace!("p(x1) = {poly}");
+        let mut y_last = y0;
+        for (y, mut a) in pts {
+            trace!("Adding p({y}) = {a}");
+            // TODO: check if calculating `a` with less divisions is faster
+            for (ai, yi) in &poly.coeffs {
+                a = (a - ai) / (y - yi);
             }
-            if y.len() > self.extra_pts {
-                let mut last_coeffs = (i - self.extra_pts)..=i;
-                if last_coeffs.all(|d| a[(d, d)].is_zero()) {
-                    let mut coeff = Vec::from_iter((0..i - self.extra_pts).map(|c| a[(c, c)]));
-                    let a_last = coeff.pop().unwrap_or_default();
-                    y.truncate(coeff.len());
-                    let coeffs = coeff.into_iter().zip(y.into_iter()).collect();
-                    return Some(NewtonPoly {
-                        a_last,
-                        coeffs
-                    })
+            a = (a - poly.a_last) / (y - y_last);
+            poly.coeffs.push((poly.a_last, y_last));
+            poly.a_last = a;
+            trace!("p(x1) = {poly}");
+            if poly.a_last.is_zero() {
+                let trailing_zeroes = poly.coeffs.iter().rev()
+                    .take_while(|(a, _)| a.is_zero())
+                    .count();
+                if trailing_zeroes >= self.extra_pts {
+                    poly.coeffs.truncate(poly.coeffs.len() - trailing_zeroes);
+                    if let Some((a, _y)) = poly.coeffs.pop() {
+                        poly.a_last = a;
+                    }
+                    debug!("Reconstructed {poly}");
+                    return Some(poly);
                 }
             }
+            y_last = y;
         }
+        debug!("Reconstruction failed");
         None
     }
 
@@ -124,51 +132,6 @@ where F: FnMut([Z64<P>; 1]) -> Z64<P> {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct TriangleMatrix<T> {
-    elem: Vec<T>,
-    nrows: usize
-}
-
-impl<T> TriangleMatrix<T> {
-    fn with_row_capacity(nrow: usize) -> Self {
-        let capacity = row_start(nrow);
-        Self {
-            elem: Vec::with_capacity(capacity),
-            nrows: 0
-        }
-    }
-
-    fn nrows(&self) -> usize {
-        self.nrows
-    }
-}
-
-impl<T: Clone + Zero> TriangleMatrix<T> {
-    fn add_zero_row(&mut self) {
-        self.nrows += 1;
-        self.elem.resize(self.elem.len() + self.nrows, T::zero())
-    }
-}
-
-impl<T> Index<(usize, usize)> for TriangleMatrix<T> {
-    type Output = T;
-
-    fn index(&self, index: (usize, usize)) -> &Self::Output {
-        &self.elem[row_start(index.0) + index.1]
-    }
-}
-
-impl<T> IndexMut<(usize, usize)> for TriangleMatrix<T> {
-    fn index_mut(&mut self, index: (usize, usize)) -> &mut T {
-        &mut self.elem[row_start(index.0) + index.1]
-    }
-}
-
-fn row_start(nrow: usize) -> usize {
-    (nrow * (nrow + 1)) / 2
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct NewtonPoly<T, U = T> {
     a_last: T,
     coeffs: Vec<(T, U)>,
@@ -203,6 +166,15 @@ impl<T: One, U> One for NewtonPoly<T, U> {
 impl<T, U> NewtonPoly<T, U> {
     fn is_const(&self) -> bool {
         self.coeffs.is_empty()
+    }
+}
+
+impl<const P: u64> From<Z64<P>> for NewtonPoly<Z64<P>> {
+    fn from(z: Z64<P>) -> Self {
+        Self {
+            a_last: z,
+            coeffs: Vec::new(),
+        }
     }
 }
 
@@ -405,21 +377,20 @@ macro_rules! impl_newton_poly_recursive {
                                 rec,
                                 &mut rng
                             );
-                            if let Some(a) = a {
-                                trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
-                                res.coeffs.push((a, x1));
-                                trace!("Intermediate poly: {res}");
-                                let trailing_zeroes = res.coeffs.iter().rev().take_while(|(c, _)| c.is_zero()).count();
-                                if trailing_zeroes > rec.extra_pts {
-                                    res.coeffs.truncate(res.coeffs.len() - trailing_zeroes);
-                                    if let Some((a, _y)) = res.coeffs.pop() {
-                                        res.a_last = a;
-                                    }
-                                    return Some(res)
-                                }
-                            } else {
+                            let Some(a) = a  else {
                                 return None
                             };
+                            trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
+                            res.coeffs.push((a, x1));
+                            trace!("Intermediate poly: {res}");
+                            let trailing_zeroes = res.coeffs.iter().rev().take_while(|(c, _)| c.is_zero()).count();
+                            if trailing_zeroes > rec.extra_pts {
+                                res.coeffs.truncate(res.coeffs.len() - trailing_zeroes);
+                                if let Some((a, _y)) = res.coeffs.pop() {
+                                    res.a_last = a;
+                                }
+                                return Some(res)
+                            }
                         }
                         None
                     }
