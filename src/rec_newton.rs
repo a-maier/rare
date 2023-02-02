@@ -174,13 +174,17 @@ impl<const P: u64> From<Z64<P>> for NewtonPoly<Z64<P>> {
 
 impl<const P: u64> From<&NewtonPoly<Z64<P>>> for DensePoly<Z64<P>> {
     fn from(p: &NewtonPoly<Z64<P>>) -> Self {
-        let mut res = Self::zero();
-        let mut prod = Self::one();
-        for (a, y) in &p.coeffs {
-            res += &prod * a;
-            prod *= Self::from_coeff_unchecked(vec![-*y, One::one()]);
+        if p.is_zero() {
+            return Zero::zero();
         }
-        res + &prod * &p.a_last
+        let mut res = DensePoly::from_coeff_unchecked(
+            vec![p.a_last]
+        );
+        for (a, y) in p.coeffs.iter().rev() {
+            let xmy = Self::from_coeff_unchecked(vec![-*y, One::one()]);
+            res = xmy * res + a;
+        }
+        res
     }
 }
 
@@ -188,13 +192,11 @@ impl<const P: u64> Eval<Z64<P>> for NewtonPoly<Z64<P>> {
     type Output = Z64<P>;
 
     fn eval(&self, x: &Z64<P>) -> Z64<P> {
-        let mut res = Z64::zero();
-        let mut prod = Z64::one();
-        for (a, y) in &self.coeffs {
-            res += prod * a;
-            prod *= x - y;
+        let mut res = self.a_last;
+        for (a, y) in self.coeffs.iter().rev() {
+            res = a + (x - y) * res;
         }
-        res + prod * self.a_last
+        res
     }
 }
 
@@ -425,7 +427,7 @@ mod tests {
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
             let poly = DensePoly::from_coeff(coeff);
-            eprintln!("{poly}");
+            eprintln!("testing {poly}");
             let reconstructed = (|x: Z64<P>| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
             eprintln!("{reconstructed}");
             let reconstructed: DensePoly<Z64<P>> = reconstructed.into();
