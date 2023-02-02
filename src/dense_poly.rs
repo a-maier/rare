@@ -27,6 +27,18 @@ impl<T> DensePoly<T> {
             Some(self.coeff.len() - 1)
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.coeff.len()
+    }
+
+    pub fn coeffs(&self) -> &[T] {
+        &self.coeff
+    }
+
+    pub fn coeff(&self, i: usize) -> &T {
+        &self.coeff[i]
+    }
 }
 
 impl<T: Zero> DensePoly<T> {
