@@ -90,6 +90,39 @@ where for<'a> T: AddAssign<&'a T>
     }
 }
 
+impl<T: AddAssign + Zero> AddAssign<T> for DensePoly<T> {
+    fn add_assign(&mut self, rhs: T) {
+        if rhs.is_zero() {
+            return;
+        }
+        if self.coeff.is_empty() {
+            self.coeff = vec![rhs];
+        } else {
+            self.coeff[0] += rhs;
+            if self.coeff.len() == 1 && self.coeff[0].is_zero() {
+                self.coeff.clear()
+            }
+        }
+    }
+}
+
+impl<T: Zero> AddAssign<&T> for DensePoly<T>
+where for<'a> T: AddAssign<&'a T>
+{
+    fn add_assign(&mut self, rhs: &T) {
+        if rhs.is_zero() {
+            return;
+        }
+        if self.coeff.is_empty() {
+            self.coeff.push(Zero::zero())
+        }
+        self.coeff[0] += rhs;
+        if self.coeff.len() == 1 && self.coeff[0].is_zero() {
+            self.coeff.clear()
+        }
+    }
+}
+
 impl<T: SubAssign + Zero> SubAssign for DensePoly<T> {
     fn sub_assign(&mut self, mut rhs: Self) {
         if self.coeff.len() < rhs.coeff.len() {
@@ -113,6 +146,38 @@ where for<'a> T: SubAssign<&'a T>
             *lhs -= rhs;
         }
         self.delete_trailing_zeroes()
+    }
+}
+
+impl<T: SubAssign + Zero> SubAssign<T> for DensePoly<T> {
+    fn sub_assign(&mut self, rhs: T) {
+        if rhs.is_zero() {
+            return;
+        }
+        if self.coeff.is_empty() {
+            self.coeff.push(Zero::zero())
+        }
+        self.coeff[0] -= rhs;
+        if self.coeff.len() == 1 && self.coeff[0].is_zero() {
+            self.coeff.clear()
+        }
+    }
+}
+
+impl<T: Zero> SubAssign<&T> for DensePoly<T>
+where for<'a> T: SubAssign<&'a T>
+{
+    fn sub_assign(&mut self, rhs: &T) {
+        if rhs.is_zero() {
+            return;
+        }
+        if self.coeff.is_empty() {
+            self.coeff.push(Zero::zero())
+        }
+        self.coeff[0] -= rhs;
+        if self.coeff.len() == 1 && self.coeff[0].is_zero() {
+            self.coeff.clear()
+        }
     }
 }
 
@@ -147,11 +212,22 @@ where for<'a> T: AddAssign<&'a T>
     }
 }
 
-impl<T: SubAssign + Zero> Sub for DensePoly<T> {
+impl<T: AddAssign + Zero> Add<T> for DensePoly<T> {
     type Output = Self;
 
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
+    fn add(mut self, rhs: T) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl<T: Zero> Add<&T> for DensePoly<T>
+where for<'a> T: AddAssign<&'a T>
+{
+    type Output = Self;
+
+    fn add(mut self, rhs: &T) -> Self::Output {
+        self += rhs;
         self
     }
 }
@@ -162,6 +238,26 @@ where for<'a> T: SubAssign<&'a T>
     type Output = Self;
 
     fn sub(mut self, rhs: &Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl<T: Zero> Sub<&T> for DensePoly<T>
+where for<'a> T: SubAssign<&'a T>
+{
+    type Output = Self;
+
+    fn sub(mut self, rhs: &T) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl<T: SubAssign + Zero> Sub<T> for DensePoly<T> {
+    type Output = Self;
+
+    fn sub(mut self, rhs: T) -> Self::Output {
         self -= rhs;
         self
     }
