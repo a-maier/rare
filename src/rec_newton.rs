@@ -163,12 +163,6 @@ impl<T: One, U> One for NewtonPoly<T, U> {
     }
 }
 
-impl<T, U> NewtonPoly<T, U> {
-    fn is_const(&self) -> bool {
-        self.coeffs.is_empty()
-    }
-}
-
 impl<const P: u64> From<Z64<P>> for NewtonPoly<Z64<P>> {
     fn from(z: Z64<P>) -> Self {
         Self {
