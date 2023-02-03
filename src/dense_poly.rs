@@ -4,7 +4,7 @@ use galois_fields::Z64;
 use itertools::Itertools;
 use paste::paste;
 
-use crate::traits::{Zero, One, Eval, WithVars};
+use crate::traits::{Zero, One, Eval, WithVars, TryEval};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct DensePoly<T> {
@@ -439,23 +439,29 @@ impl<T: Zero> From<T> for DensePoly<T> {
     }
 }
 
-impl<const P: u64> Eval<Z64<P>> for DensePoly<Z64<P>> {
+impl<const P: u64> TryEval<Z64<P>> for DensePoly<Z64<P>> {
     type Output = Z64<P>;
 
-    fn eval(&self, x: &Z64<P>) -> Z64<P> {
-        self.coeff.iter().rev().fold(
+    fn try_eval(&self, x: &Z64<P>) -> Option<Z64<P>> {
+        Some(self.coeff.iter().rev().fold(
             Zero::zero(),
             |acc, c| acc * x + c
-        )
+        ))
     }
 }
 
-impl<const P: u64> Eval<[Z64<P>; 1]> for DensePoly<Z64<P>> {
+impl<const P: u64> TryEval<[Z64<P>; 1]> for DensePoly<Z64<P>> {
     type Output = Z64<P>;
 
-    fn eval(&self, x: &[Z64<P>; 1]) -> Z64<P> {
-        self.eval(&x[0])
+    fn try_eval(&self, x: &[Z64<P>; 1]) -> Option<Z64<P>> {
+        self.try_eval(&x[0])
     }
+}
+
+impl<const P: u64> Eval<Z64<P>> for DensePoly<Z64<P>> {
+}
+
+impl<const P: u64> Eval<[Z64<P>; 1]> for DensePoly<Z64<P>> {
 }
 
 impl<'a, 'b, T, S: Display> WithVars<'a, &'b [S; 1]> for DensePoly<T>
@@ -552,18 +558,21 @@ macro_rules! impl_dense_poly_recursive {
                     }
                 }
 
-                impl<const P: u64> Eval<[Z64<P>; $x]> for [<DensePoly $x>]<Z64<P>> {
+                impl<const P: u64> TryEval<[Z64<P>; $x]> for [<DensePoly $x>]<Z64<P>> {
                     type Output = Z64<P>;
 
-                    fn eval(&self, x: &[Z64<P>; $x]) -> Z64<P> {
+                    fn try_eval(&self, x: &[Z64<P>; $x]) -> Option<Z64<P>> {
                         let (x0, rest) = x.split_first().unwrap();
                         let mut xs = [Zero::zero(); $y];
                         xs.copy_from_slice(rest);
-                        self.coeff.iter().rev().fold(
+                        Some(self.coeff.iter().rev().fold(
                             Zero::zero(),
                             |acc, c| acc * x0 + c.eval(&xs)
-                        )
+                        ))
                     }
+                }
+
+                impl<const P: u64> Eval<[Z64<P>; $x]> for [<DensePoly $x>]<Z64<P>> {
                 }
 
                 impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<DensePoly $x>]<Z64<P>>

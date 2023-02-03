@@ -6,7 +6,7 @@ use rand::{Rng, thread_rng};
 use paste::paste;
 
 use crate::{traits::{Zero, One, WithVars, Rec}, rand::{UniqueRand, UniqueRandIter}};
-use crate::{dense_poly::DensePoly, traits::Eval};
+use crate::{dense_poly::DensePoly, traits::{Eval, TryEval}};
 
 /// Univariate polynomial reconstruction using Newton interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -188,25 +188,27 @@ impl<const P: u64> From<&NewtonPoly<Z64<P>>> for DensePoly<Z64<P>> {
     }
 }
 
-impl<const P: u64> Eval<Z64<P>> for NewtonPoly<Z64<P>> {
+impl<const P: u64> TryEval<Z64<P>> for NewtonPoly<Z64<P>> {
     type Output = Z64<P>;
 
-    fn eval(&self, x: &Z64<P>) -> Z64<P> {
+    fn try_eval(&self, x: &Z64<P>) -> Option<Z64<P>> {
         let mut res = self.a_last;
         for (a, y) in self.coeffs.iter().rev() {
             res = a + (x - y) * res;
         }
-        res
+        Some(res)
     }
 }
+impl<const P: u64> Eval<Z64<P>> for NewtonPoly<Z64<P>> { }
 
-impl<const P: u64> Eval<[Z64<P>; 1]> for NewtonPoly<Z64<P>> {
+impl<const P: u64> TryEval<[Z64<P>; 1]> for NewtonPoly<Z64<P>> {
     type Output = Z64<P>;
 
-    fn eval(&self, x: &[Z64<P>; 1]) -> Z64<P> {
-        self.eval(&x[0])
+    fn try_eval(&self, x: &[Z64<P>; 1]) -> Option<Z64<P>> {
+        self.try_eval(&x[0])
     }
 }
+impl<const P: u64> Eval<[Z64<P>; 1]> for NewtonPoly<Z64<P>> { }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FmtNewtonPoly<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display> {
@@ -325,10 +327,10 @@ macro_rules! impl_newton_poly_recursive {
                     }
                 }
 
-                impl<const P: u64> Eval<[Z64<P>; $x]> for [<NewtonPoly $x>]<Z64<P>> {
+                impl<const P: u64> TryEval<[Z64<P>; $x]> for [<NewtonPoly $x>]<Z64<P>> {
                     type Output = Z64<P>;
 
-                    fn eval(&self, x: &[Z64<P>; $x]) -> Z64<P> {
+                    fn try_eval(&self, x: &[Z64<P>; $x]) -> Option<Z64<P>> {
                         // TODO: better split_first operating on arrays
                         let (x0, rest) = x.split_first().unwrap();
                         let mut xs = [Z64::zero(); $y];
@@ -340,9 +342,10 @@ macro_rules! impl_newton_poly_recursive {
                             res += prod * a.eval(&xs);
                             prod *= x0 - y;
                         }
-                        res + prod * self.a_last.eval(&xs)
+                        Some(res + prod * self.a_last.eval(&xs))
                     }
                 }
+                impl<const P: u64> Eval<[Z64<P>; $x]> for [<NewtonPoly $x>]<Z64<P>> { }
 
                 impl<F, const P: u64> Rec<NewtonRec, [Z64<P>; $x]> for F
                 where F: FnMut([Z64<P>; $x]) -> Z64<P> {

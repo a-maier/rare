@@ -15,10 +15,16 @@ pub trait Rec<R, Args> {
     }
 }
 
-pub trait Eval<T> {
+pub trait Eval<T>: TryEval<T> {
+    fn eval(&self, pt: &T) -> <Self as TryEval<T>>::Output {
+        self.try_eval(pt).unwrap()
+    }
+}
+
+pub trait TryEval<T> {
     type Output;
 
-    fn eval(&self, pt: &T) -> Self::Output;
+    fn try_eval(&self, pt: &T) -> Option<Self::Output>;
 }
 
 // custom Zero trait that doesn't require Add
