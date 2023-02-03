@@ -5,36 +5,36 @@ use galois_fields::Z64;
 use crate::{traits::{Zero, One, WithVars, TryEval}, dense_poly::DensePoly};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct DenseRat<T> {
-    num: DensePoly<T>,
-    den: DensePoly<T>
+pub struct Rat<N, D = N> {
+    num: N,
+    den: D
 }
 
-impl<T> DenseRat<T> {
+impl<N, D> Rat<N, D> {
     pub fn from_num_den_unchecked(
-        num: DensePoly<T>,
-        den: DensePoly<T>
+        num: N,
+        den: D
     ) -> Self {
-        debug_assert!(!den.is_zero());
+        //debug_assert!(!den.is_zero());
         Self { num, den }
     }
 
-    pub fn num(&self) -> &DensePoly<T> {
+    pub fn num(&self) -> &N {
         &self.num
     }
 
-    pub fn den(&self) -> &DensePoly<T> {
+    pub fn den(&self) -> &D {
         &self.den
     }
 }
 
-impl<T: One> DenseRat<T> {
+impl<N: Zero, D: One> Rat<N, D> {
     pub fn new() -> Self {
         Self { num: Zero::zero(), den: One::one() }
     }
 }
 
-impl<T: One> Zero for DenseRat<T> {
+impl<N: Zero, D: One> Zero for Rat<N, D> {
     fn zero() -> Self {
         Self::new()
     }
@@ -44,7 +44,7 @@ impl<T: One> Zero for DenseRat<T> {
     }
 }
 
-impl<T: One> One for DenseRat<T> {
+impl<N: One, D: One> One for Rat<N, D> {
     fn one() -> Self {
         Self{ num: One::one(), den: One::one() }
     }
@@ -54,12 +54,14 @@ impl<T: One> One for DenseRat<T> {
     }
 }
 
-impl<T, U> TryEval<U> for DenseRat<T>
+impl<N, D, U> TryEval<U> for Rat<N, D>
 where
-    DensePoly<T>: TryEval<U>,
-    <DensePoly<T> as TryEval<U>>::Output: Div + Zero
+    N: TryEval<U>,
+    D: TryEval<U>,
+   <D as TryEval<U>>::Output: Zero,
+   <N as TryEval<U>>::Output: Div<<D as TryEval<U>>::Output>,
 {
-    type Output = <<DensePoly<T> as TryEval<U>>::Output as Div>::Output;
+    type Output = <<N as TryEval<U>>::Output as Div<<D as TryEval<U>>::Output>>::Output;
 
     fn try_eval(&self, pt: &U) -> Option<Self::Output> {
         let den = self.den().try_eval(pt)?;
@@ -75,19 +77,22 @@ where
 }
 
 
-impl<'a, 'b, T, S: Display> WithVars<'a, &'b [S; 1]> for DenseRat<T>
+impl<'a, 'b, N, D, S: Display> WithVars<'a, &'b [S; 1]> for Rat<N, D>
 where
-    T: Display + One + Zero + 'a,
+    N: Display + One + Zero + 'a,
+    D: Display + One + Zero + 'a,
 {
-    type Output = FmtUniRat<'a, 'b, T, S>;
+    type Output = FmtUniRat<'a, 'b, N, D, S>;
 
     fn with_vars(&'a self, vars: &'b[S; 1]) -> Self::Output {
         FmtUniRat::new(self, vars)
     }
 }
 
-impl<T> Display for DenseRat<T>
-where DensePoly<T>: Display
+impl<N, D> Display for Rat<N, D>
+where
+    N: Display + Zero,
+    D: Display
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.num.is_zero() {
@@ -99,18 +104,26 @@ where DensePoly<T>: Display
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct FmtUniRat<'a, 'b, T: Display + One + Zero, V: Display> {
-    rat: &'a DenseRat<T>,
+pub struct FmtUniRat<'a, 'b, N, D, V: Display>
+where
+    N: Display + One + Zero,
+    D: Display + One + Zero
+{
+    rat: &'a Rat<N, D>,
     var: &'b[V],
 }
 
-impl<'a, 'b, T: Display + One + Zero, V: Display> FmtUniRat<'a, 'b, T, V> {
-    fn new(rat: &'a DenseRat<T>, var: &'b [V]) -> Self {
+impl<'a, 'b, N, D, V: Display> FmtUniRat<'a, 'b, N, D, V>
+where
+    N: Display + One + Zero,
+    D: Display + One + Zero
+{
+    fn new(rat: &'a Rat<N, D>, var: &'b [V]) -> Self {
         Self { rat, var }
     }
 }
 
-impl<'a, 'b, V: Display, const P: u64> Display for FmtUniRat<'a, 'b, Z64<P>, V> {
+impl<'a, 'b, V: Display, const P: u64> Display for FmtUniRat<'a, 'b, DensePoly<Z64<P>>, DensePoly<Z64<P>>, V> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.rat.is_zero() {
             return write!(f, "0");

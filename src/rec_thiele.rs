@@ -4,7 +4,7 @@ use log::{debug, trace};
 use galois_fields::{Z64, TryDiv};
 use rand::{Rng, thread_rng};
 
-use crate::{traits::{Zero, One, WithVars, Rec, TryEval}, rand::UniqueRandIter, dense_rat::DenseRat, dense_poly::DensePoly};
+use crate::{traits::{Zero, One, WithVars, Rec, TryEval}, rand::UniqueRandIter, dense_rat::Rat, dense_poly::DensePoly};
 
 /// Univariate rational function reconstruction using Thiele interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -139,7 +139,7 @@ impl<T: Zero, U> Zero for ThieleRat<T, U> {
     }
 }
 
-impl<const P: u64> From<&ThieleRat<Z64<P>>> for DenseRat<Z64<P>> {
+impl<const P: u64> From<&ThieleRat<Z64<P>>> for Rat<DensePoly<Z64<P>>> {
     fn from(p: &ThieleRat<Z64<P>>) -> Self {
         if p.is_zero() {
             return Zero::zero();
@@ -153,11 +153,11 @@ impl<const P: u64> From<&ThieleRat<Z64<P>>> for DenseRat<Z64<P>> {
         let norm = res_den.coeffs().last().unwrap().inv();
         res_num *= &norm;
         res_den *= &norm;
-        DenseRat::from_num_den_unchecked(res_num, res_den)
+        Rat::from_num_den_unchecked(res_num, res_den)
     }
 }
 
-impl<const P: u64> From<ThieleRat<Z64<P>>> for DenseRat<Z64<P>> {
+impl<const P: u64> From<ThieleRat<Z64<P>>> for Rat<DensePoly<Z64<P>>> {
     fn from(p: ThieleRat<Z64<P>>) -> Self {
         Self::from(&p)
     }
@@ -286,14 +286,14 @@ mod tests {
             coeff.push(One::one());
             let den = DensePoly::from_coeff(coeff);
 
-            let rat = DenseRat::from_num_den_unchecked(num, den);
+            let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
             let reconstructed =
                 (|x: Z64<P>| rat.try_eval(&x))
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
             eprintln!("{reconstructed}");
-            let reconstructed: DenseRat<Z64<P>> = reconstructed.into();
+            let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();
             eprintln!("{reconstructed}");
             assert_eq!(rat, reconstructed)
         }
@@ -324,12 +324,12 @@ mod tests {
             coeff.push(One::one());
             let den = DensePoly::from_coeff(coeff);
 
-            let rat = DenseRat::from_num_den_unchecked(num, den);
+            let rat = Rat::from_num_den_unchecked(num, den);
             let reconstructed =
                 (|x: Z64<P>| rat.try_eval(&x))
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
-            let reconstructed: DenseRat<Z64<P>> = reconstructed.into();
+            let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();
             assert_eq!(rat, reconstructed)
         }
     }
