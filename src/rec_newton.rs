@@ -5,7 +5,7 @@ use log::{debug, trace};
 use rand::{Rng, thread_rng};
 use paste::paste;
 
-use crate::{traits::{Zero, One, WithVars, Rec}, rand::{UniqueRand, UniqueRandIter}};
+use crate::{traits::{Zero, One, WithVars, Rec}, rand::pt_iter};
 use crate::{dense_poly::DensePoly, traits::{Eval, TryEval}};
 
 /// Univariate polynomial reconstruction using Newton interpolation
@@ -87,7 +87,7 @@ impl NewtonRec {
     where F: FnMut(Z64<P>) -> Z64<P>
     {
         self.rec_from_seq(
-            UniqueRandIter::new(rng).map(|pt| (pt, poly(pt)))
+            pt_iter(rng).map(|pt| (pt, poly(pt)))
         )
     }
 
@@ -111,7 +111,7 @@ where F: FnMut(Z64<P>) -> Z64<P> {
         rng: impl Rng
     ) -> Self::Output {
         reconstructor.rec_from_seq(
-            UniqueRandIter::new(rng).map(|pt| (pt, (self)(pt)))
+            pt_iter(rng).map(|pt| (pt, (self)(pt)))
         )
     }
 }
@@ -126,7 +126,7 @@ where F: FnMut([Z64<P>; 1]) -> Z64<P> {
         rng: impl Rng
     ) -> Self::Output {
         reconstructor.rec_from_seq(
-            UniqueRandIter::new(rng).map(|pt| (pt, (self)([pt])))
+            pt_iter(rng).map(|pt| (pt, (self)([pt])))
         )
     }
 }
@@ -358,8 +358,9 @@ macro_rules! impl_newton_poly_recursive {
                     ) -> Self::Output {
                         debug!("{}d reconstruction", $x);
                         let mut res: [<NewtonPoly $x>]<Z64<P>> = Default::default();
-                        let mut rand = UniqueRand::new();
-                        while let Some(x1) = rand.try_gen(&mut rng) {
+                        let rand: Z64<P> = rng.gen();
+                        for shift in 0..P {
+                            let x1 = rand + Z64::new_unchecked(shift);
                             trace!("x1 = {x1}");
                             let prefact = res.coeffs.iter().fold(
                                 Z64::<P>::one(),

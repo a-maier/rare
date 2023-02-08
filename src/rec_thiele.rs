@@ -4,7 +4,7 @@ use log::{debug, trace};
 use galois_fields::{Z64, TryDiv};
 use rand::{Rng, thread_rng};
 
-use crate::{traits::{Zero, One, WithVars, Rec, TryEval}, rand::UniqueRandIter, dense_rat::Rat, dense_poly::DensePoly};
+use crate::{traits::{Zero, One, WithVars, Rec, TryEval}, dense_rat::Rat, dense_poly::DensePoly, rand::pt_iter};
 
 /// Univariate rational function reconstruction using Thiele interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -91,9 +91,7 @@ impl ThieleRec {
     where F: FnMut(Z64<P>) -> Option<Z64<P>>
     {
         self.rec_from_seq(
-            UniqueRandIter::new(rng).filter_map(
-                |pt| poly(pt).map(|fy| (pt, fy))
-            )
+            pt_iter(rng).filter_map(|pt| poly(pt).map(|fy| (pt, fy)))
         )
     }
 
@@ -150,7 +148,9 @@ impl<const P: u64> From<&ThieleRat<Z64<P>>> for Rat<DensePoly<Z64<P>>> {
             let xmy = DensePoly::from_coeff_unchecked(vec![-*y, One::one()]);
             (res_num, res_den) = (&res_num * a + xmy * res_den, res_num);
         }
-        let norm = res_den.coeffs().last().unwrap().inv();
+        let norm = res_den.coeffs().iter()
+            .find(|c| !c.is_zero())
+            .unwrap().inv();
         res_num *= &norm;
         res_den *= &norm;
         Rat::from_num_den_unchecked(res_num, res_den)
@@ -226,7 +226,7 @@ where F: FnMut(Z64<P>) -> Option<Z64<P>> {
         rng: impl ::rand::Rng
     ) -> Self::Output {
         reconstructor.rec_from_seq(
-            UniqueRandIter::new(rng).filter_map(
+            pt_iter(rng).filter_map(
                 |pt| (self)(pt).map(|fy| (pt, fy))
             )
         )
@@ -278,13 +278,17 @@ mod tests {
             let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
             let num = DensePoly::from_coeff(coeff);
 
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            let mut coeff = Vec::from_iter(
-                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms - 1)
-            );
-            coeff.push(One::one());
-            let den = DensePoly::from_coeff(coeff);
+            let den = if num.is_zero() {
+                One::one()
+            } else {
+                let max_pow = rng.gen_range(0..=MAX_POW);
+                let nterms = 2usize.pow(max_pow);
+                let mut coeff = Vec::from_iter(
+                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms)
+                );
+                coeff[0] = One::one();
+                DensePoly::from_coeff(coeff)
+            };
 
             let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
@@ -316,13 +320,17 @@ mod tests {
             let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
             let num = DensePoly::from_coeff(coeff);
 
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            let mut coeff = Vec::from_iter(
-                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms - 1)
-            );
-            coeff.push(One::one());
-            let den = DensePoly::from_coeff(coeff);
+            let den = if num.is_zero() {
+                One::one()
+            } else {
+                let max_pow = rng.gen_range(0..=MAX_POW);
+                let nterms = 2usize.pow(max_pow);
+                let mut coeff = Vec::from_iter(
+                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms)
+                );
+                coeff[0] = One::one();
+                DensePoly::from_coeff(coeff)
+            };
 
             let rat = Rat::from_num_den_unchecked(num, den);
             let reconstructed =

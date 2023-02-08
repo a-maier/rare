@@ -4,7 +4,7 @@ use galois_fields::Z64;
 use log::debug;
 use num_traits::Inv;
 
-use crate::{matrix::Matrix, traits::{Zero, One, Rec}, dense_poly::DensePoly, dense_rat::Rat, rand::UniqueRandIter};
+use crate::{matrix::Matrix, traits::{Zero, One, Rec}, dense_poly::DensePoly, dense_rat::Rat, rand::pt_iter};
 
 /// Reconstruct a rational function by solving linear systems of equations
 ///
@@ -83,7 +83,7 @@ where F: FnMut(Z64<P>) -> Option<Z64<P>> {
         rng: impl ::rand::Rng
     ) -> Self::Output {
         reconstructor.rec_from_seq(
-            UniqueRandIter::new(rng).filter_map(
+            pt_iter(rng).filter_map(
                 |pt| (self)(pt).map(|fy| (pt, fy))
             )
         )
