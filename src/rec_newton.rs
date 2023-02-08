@@ -1,6 +1,6 @@
 use std::fmt::{Display, self};
 
-use galois_fields::Z64;
+use galois_fields::{Z64, TryDiv};
 use log::{debug, trace};
 use rand::{Rng, thread_rng};
 use paste::paste;
@@ -18,6 +18,20 @@ impl Default for NewtonRec {
     fn default() -> Self {
         Self { extra_pts: 1 }
     }
+}
+
+fn next_a<const P: u64>(
+    poly: &NewtonPoly<Z64<P>>,
+    y: Z64<P>,
+    f_y: Z64<P>,
+    y_last: Z64<P>
+) -> Option<Z64<P>> {
+    // TODO: check if calculating `a` with less divisions is faster
+    let mut a = f_y;
+    for (ai, yi) in &poly.coeffs {
+        a = (a - ai).try_div(y - yi)?;
+    }
+    (a - poly.a_last).try_div(y - y_last)
 }
 
 impl NewtonRec {
@@ -40,13 +54,11 @@ impl NewtonRec {
         let mut poly = NewtonPoly::from(a0);
         trace!("p(x1) = {poly}");
         let mut y_last = y0;
-        for (y, mut a) in pts {
-            trace!("Adding p({y}) = {a}");
-            // TODO: check if calculating `a` with less divisions is faster
-            for (ai, yi) in &poly.coeffs {
-                a = (a - ai) / (y - yi);
-            }
-            a = (a - poly.a_last) / (y - y_last);
+        for (y, f_y) in pts {
+            trace!("Adding p({y}) = {f_y}");
+            let Some(a) = next_a(&poly, y, f_y, y_last) else {
+                continue
+            };
             poly.coeffs.push((poly.a_last, y_last));
             poly.a_last = a;
             trace!("p(x1) = {poly}");
@@ -364,7 +376,9 @@ macro_rules! impl_newton_poly_recursive {
                                 Z64::<P>::one(),
                                 |p, pt| p * (x1 - pt.1)
                             );
-                            let prefact = prefact.inv();
+                            let Some(prefact) = prefact.try_inv() else {
+                                continue
+                            };
                             let mut poly_rest = |xs: [Z64<P>; $y]| {
                                 let mut args = [x1; $x];
                                 args[1..].copy_from_slice(&xs);
