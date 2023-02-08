@@ -336,13 +336,11 @@ macro_rules! impl_newton_poly_recursive {
                         let mut xs = [Z64::zero(); $y];
                         xs.copy_from_slice(&rest);
 
-                        let mut res = Z64::zero();
-                        let mut prod = Z64::one();
-                        for (a, y) in &self.coeffs {
-                            res += prod * a.eval(&xs);
-                            prod *= x0 - y;
+                        let mut res = self.a_last.eval(&xs);
+                        for (a, y) in self.coeffs.iter().rev() {
+                            res = a.eval(&xs) + (x0 - y) * res;
                         }
-                        Some(res + prod * self.a_last.eval(&xs))
+                        Some(res)
                     }
                 }
                 impl<const P: u64> Eval<[Z64<P>; $x]> for [<NewtonPoly $x>]<Z64<P>> { }
