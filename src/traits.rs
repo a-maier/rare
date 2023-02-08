@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use galois_fields::Z64;
 use rand::{Rng, thread_rng};
 
@@ -56,6 +58,18 @@ impl<const P: u64> One for Z64<P> {
 
     fn is_one(&self) -> bool {
         num_traits::One::is_one(self)
+    }
+}
+
+impl One for NonZeroUsize {
+    fn one() -> Self {
+        unsafe {
+            Self::new_unchecked(1)
+        }
+    }
+
+    fn is_one(&self) -> bool {
+        *self == <Self as One>::one()
     }
 }
 
