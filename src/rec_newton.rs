@@ -1,4 +1,4 @@
-use std::fmt::{Display, self};
+use std::{fmt::{Display, self}, ops::ControlFlow};
 
 use galois_fields::Z64;
 use log::{debug, trace};
@@ -7,6 +7,222 @@ use paste::paste;
 
 use crate::{traits::{Zero, One, WithVars, Rec}, rand::pt_iter};
 use crate::{dense_poly::DensePoly, traits::{Eval, TryEval}};
+
+/// Univariate polynomial reconstruction using Newton interpolation
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct NewtonPolyRec<const P: u64> {
+    poly: NewtonPoly<Z64<P>>,
+    y_last: Option<Z64<P>>,
+    extra_pts: usize
+}
+
+impl<const P: u64> Default for NewtonPolyRec<P> {
+    fn default() -> Self {
+        Self {
+            poly: Zero::zero(),
+            y_last: None,
+            extra_pts: 1
+        }
+    }
+}
+
+impl<const P: u64> NewtonPolyRec<P> {
+    pub fn new(extra_pts: usize) -> Self {
+        Self {
+            extra_pts,
+            ..Default::default()
+        }
+    }
+
+    pub fn add_pt(
+        &mut self,
+        y: &[Z64<P>; 1],
+        f_y: Z64<P>
+    ) -> ControlFlow<(), usize> {
+        trace!("adding p({}) = {f_y}", y[0]);
+        if let Some(y_last) = self.y_last {
+            let Some(a) = self.next_a(y[0], f_y) else {
+                return ControlFlow::Continue(0)
+            };
+            self.poly.coeffs.push((self.poly.a_last, y_last));
+            self.poly.a_last = a;
+            trace!("p(x1) = {}", self.poly);
+        } else {
+            self.poly.a_last = f_y;
+        }
+        self.y_last = Some(y[0]);
+        self.next_step()
+    }
+
+    fn next_a(
+        &self,
+        y: Z64<P>,
+        f_y: Z64<P>,
+    ) -> Option<Z64<P>> {
+        let prefact = self.poly.coeffs.iter()
+            .map(|(_ai, yi)| y - yi)
+            .fold(y - self.y_last.unwrap(), |acc, x| acc * x);
+        let prefact = prefact.try_inv()?;
+        let poly_at_y = self.poly.eval(&y);
+        Some(prefact * (f_y - poly_at_y))
+    }
+
+    fn next_step(&self) -> ControlFlow<(), usize> {
+        if self.trailing_zeros() > self.extra_pts {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(0)
+        }
+    }
+
+    fn trailing_zeros(&self) -> usize {
+        if !self.poly.a_last.is_zero() {
+            return 0;
+        }
+        1 + self.poly.coeffs.iter().rev()
+            .take_while(|(a, _)| a.is_zero())
+            .count()
+    }
+
+    pub fn into_poly(mut self) -> NewtonPoly<Z64<P>> {
+        let trailing_zeros = self.trailing_zeros();
+        if trailing_zeros > 0 {
+            self.poly.coeffs.truncate(1 + self.poly.coeffs.len() - trailing_zeros);
+            if let Some((a, _y)) = self.poly.coeffs.pop() {
+                self.poly.a_last = a;
+            }
+        }
+        debug!("Reconstructed {}", self.poly);
+        self.poly
+    }
+}
+
+pub type NewtonPolyRec1<const P: u64> = NewtonPolyRec<P>;
+
+macro_rules! impl_newton_rec_recursive {
+    ( $($x:literal, $y:literal), * ) => {
+        $(
+            paste! {
+                /// Multivariate polynomial reconstruction using Newton interpolation
+                #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                pub struct [<NewtonPolyRec $x>]<const P: u64> {
+                    poly: [<NewtonPoly $x>]<Z64<P>>,
+                    next_a: [<NewtonPolyRec $y>]<P>,
+                    last_y: Option<Z64<P>>,
+                    cur_y: Option<Z64<P>>,
+                    inv_y_prod: Z64<P>,
+                    extra_pts: usize
+                }
+
+                impl<const P: u64> Default for [<NewtonPolyRec $x>]<P> {
+                    fn default() -> Self {
+                        Self {
+                            poly: Zero::zero(),
+                            cur_y: None,
+                            last_y: None,
+                            next_a: Default::default(),
+                            inv_y_prod: One::one(),
+                            extra_pts: 1
+                        }
+                    }
+                }
+
+                impl<const P: u64> [<NewtonPolyRec $x>]<P> {
+                    pub fn new(extra_pts: usize) -> Self {
+                        Self {
+                            extra_pts,
+                            next_a: [<NewtonPolyRec $y>]::new(extra_pts),
+                            inv_y_prod: One::one(),
+                            ..Default::default()
+                        }
+                    }
+
+                    pub fn add_pt(
+                        &mut self,
+                        y: &[Z64<P>; $x],
+                        f_y: Z64<P>
+                    ) -> ControlFlow<(), usize> {
+                        trace!("adding p({y:?}) = {f_y}");
+                        if self.cur_y.is_none() {
+                            // new value of first (outermost) variable
+                            // cache new inverse product of y differences
+                            let y_prod = self.poly.coeffs.iter()
+                                .map(|(_ai, yi)| y[0] - yi)
+                                .reduce(|acc, x| acc * x)
+                                .unwrap_or(One::one());
+                            let Some(inv_y_prod) = y_prod.try_inv() else {
+                                return ControlFlow::Continue(0)
+                            };
+                            self.inv_y_prod = inv_y_prod;
+                            self.cur_y = Some(y[0]);
+                        }
+                        if self.cur_y == Some(y[0]) {
+                            // work on reconstructing the next coefficient
+                            let next_a_val = self.inv_y_prod * (f_y - self.poly.eval(y));
+                            let y_rest: &[Z64<P>; $y] = &y[1..].try_into().unwrap();
+                            match self.next_a.add_pt(y_rest, next_a_val) {
+                                ControlFlow::Continue(n) => ControlFlow::Continue(n + 1),
+                                ControlFlow::Break(_) => {
+                                    // add reconstructed coefficient to polynomial
+                                    let a = std::mem::replace(
+                                        &mut self.next_a,
+                                        [<NewtonPolyRec $y>]::new(self.extra_pts)
+                                    ).into_poly();
+                                    let a_prev = std::mem::replace(&mut self.poly.a_last, a);
+                                    if let Some(last_y) = self.last_y {
+                                        self.poly.coeffs.push((a_prev, last_y));
+                                    }
+                                    trace!("p = {}", self.poly);
+                                    self.last_y = Some(y[0]);
+                                    self.cur_y = None;
+                                    self.next_step()
+                                },
+                            }
+                        } else {
+                            // TODO:
+                            // Got a new value of the outermost variable before
+                            // finishing previous reconstructions
+                            // Should probably signal an error here
+                            debug!("Bad y value: {}", y[0]);
+                            ControlFlow::Continue($x)
+                        }
+                    }
+
+                    fn next_step(&self) -> ControlFlow<(), usize> {
+                        if self.trailing_zeros() > self.extra_pts {
+                            ControlFlow::Break(())
+                        } else {
+                            ControlFlow::Continue(0)
+                        }
+                    }
+
+                    fn trailing_zeros(&self) -> usize {
+                        if !self.poly.a_last.is_zero() {
+                            return 0;
+                        }
+                        1 + self.poly.coeffs.iter().rev()
+                            .take_while(|(a, _)| a.is_zero())
+                            .count()
+                    }
+
+                    pub fn into_poly(mut self) -> [<NewtonPoly $x>]<Z64<P>> {
+                        let trailing_zeros = self.trailing_zeros();
+                        if trailing_zeros > 0 {
+                            self.poly.coeffs.truncate(1 + self.poly.coeffs.len() - trailing_zeros);
+                            if let Some((a, _y)) = self.poly.coeffs.pop() {
+                                self.poly.a_last = a;
+                            }
+                        }
+                        debug!("Reconstructed {}", self.poly);
+                        self.poly
+                    }
+                }
+            }
+
+        )*
+    };
+}
+
 
 /// Univariate polynomial reconstruction using Newton interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -18,20 +234,6 @@ impl Default for NewtonRec {
     fn default() -> Self {
         Self { extra_pts: 1 }
     }
-}
-
-fn next_a<const P: u64>(
-    poly: &NewtonPoly<Z64<P>>,
-    y: Z64<P>,
-    f_y: Z64<P>,
-    y_last: Z64<P>
-) -> Option<Z64<P>> {
-    let prefact = poly.coeffs.iter()
-        .map(|(_ai, yi)| y - yi)
-        .fold(y - y_last, |acc, x| acc * x);
-    let prefact = prefact.try_inv()?;
-    let poly_at_y = poly.eval(&y);
-    Some(prefact * (f_y - poly_at_y))
 }
 
 impl NewtonRec {
@@ -46,36 +248,11 @@ impl NewtonRec {
     where I: IntoIterator<Item = (Z64<P>, Z64<P>)>
     {
         debug!("1d polynomial reconstruction");
-        let mut pts = pts.into_iter();
-        let Some((y0, a0)) = pts.next() else {
-            return None
-        };
-        trace!("Adding p({y0}) = {a0}");
-        let mut poly = NewtonPoly::from(a0);
-        trace!("p(x1) = {poly}");
-        let mut y_last = y0;
-        for (y, f_y) in pts {
-            trace!("Adding p({y}) = {f_y}");
-            let Some(a) = next_a(&poly, y, f_y, y_last) else {
-                continue
-            };
-            poly.coeffs.push((poly.a_last, y_last));
-            poly.a_last = a;
-            trace!("p(x1) = {poly}");
-            if poly.a_last.is_zero() {
-                let trailing_zeroes = poly.coeffs.iter().rev()
-                    .take_while(|(a, _)| a.is_zero())
-                    .count();
-                if trailing_zeroes >= self.extra_pts {
-                    poly.coeffs.truncate(poly.coeffs.len() - trailing_zeroes);
-                    if let Some((a, _y)) = poly.coeffs.pop() {
-                        poly.a_last = a;
-                    }
-                    debug!("Reconstructed {poly}");
-                    return Some(poly);
-                }
+        let mut rec = NewtonPolyRec::new(self.extra_pts);
+        for (y, f_y) in pts.into_iter() {
+            if rec.add_pt(&[y], f_y).is_break() {
+                return Some(rec.into_poly());
             }
-            y_last = y;
         }
         debug!("Reconstruction failed");
         None
@@ -367,44 +544,15 @@ macro_rules! impl_newton_poly_recursive {
                         mut rng: impl Rng
                     ) -> Self::Output {
                         debug!("{}d reconstruction", $x);
-                        let mut res: [<NewtonPoly $x>]<Z64<P>> = Default::default();
-                        let rand: Z64<P> = rng.gen();
-                        for shift in 0..P {
-                            let x1 = rand + Z64::new_unchecked(shift);
-                            trace!("x1 = {x1}");
-                            let prefact = res.coeffs.iter().fold(
-                                Z64::<P>::one(),
-                                |p, pt| p * (x1 - pt.1)
-                            );
-                            let Some(prefact) = prefact.try_inv() else {
-                                continue
-                            };
-                            let mut poly_rest = |xs: [Z64<P>; $y]| {
-                                let mut args = [x1; $x];
-                                args[1..].copy_from_slice(&xs);
-                                prefact * ((self)(args) - res.eval(&args))
-                            };
-                            let a = Rec::<NewtonRec, [Z64<P>; $y]>::rec_with_ran(
-                                &mut poly_rest,
-                                rec,
-                                &mut rng
-                            );
-                            let Some(a) = a  else {
+                        let mut rec = [<NewtonPolyRec $x>]::new(rec.extra_pts);
+                        let mut y: [Z64<P>; $x] = rng.gen();
+                        while let ControlFlow::Continue(n) = rec.add_pt(&y, (self)(y)) {
+                            if n > y.len() {
                                 return None
-                            };
-                            trace!("Reconstructed coefficient {}", a.with_vars(&["x2"]));
-                            res.coeffs.push((a, x1));
-                            trace!("Intermediate poly: {res}");
-                            let trailing_zeroes = res.coeffs.iter().rev().take_while(|(c, _)| c.is_zero()).count();
-                            if trailing_zeroes > rec.extra_pts {
-                                res.coeffs.truncate(res.coeffs.len() - trailing_zeroes);
-                                if let Some((a, _y)) = res.coeffs.pop() {
-                                    res.a_last = a;
-                                }
-                                return Some(res)
                             }
+                            y[n] += Z64::one();
                         }
-                        None
+                        Some(rec.into_poly())
                     }
                 }
 
@@ -415,6 +563,7 @@ macro_rules! impl_newton_poly_recursive {
 
 impl_newton_poly!(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16);
 impl_newton_poly_recursive!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
+impl_newton_rec_recursive!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
 
 #[cfg(test)]
 mod tests {
