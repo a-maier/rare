@@ -1,6 +1,6 @@
 use std::fmt::{Display, self};
 
-use galois_fields::{Z64, TryDiv};
+use galois_fields::Z64;
 use log::{debug, trace};
 use rand::{Rng, thread_rng};
 use paste::paste;
@@ -26,12 +26,12 @@ fn next_a<const P: u64>(
     f_y: Z64<P>,
     y_last: Z64<P>
 ) -> Option<Z64<P>> {
-    // TODO: check if calculating `a` with less divisions is faster
-    let mut a = f_y;
-    for (ai, yi) in &poly.coeffs {
-        a = (a - ai).try_div(y - yi)?;
-    }
-    (a - poly.a_last).try_div(y - y_last)
+    let prefact = poly.coeffs.iter()
+        .map(|(_ai, yi)| y - yi)
+        .fold(y - y_last, |acc, x| acc * x);
+    let prefact = prefact.try_inv()?;
+    let poly_at_y = poly.eval(&y);
+    Some(prefact * (f_y - poly_at_y))
 }
 
 impl NewtonRec {
