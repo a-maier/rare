@@ -1,8 +1,9 @@
 use std::{ops::{Add, Neg, Sub, MulAssign, DivAssign, Mul, Div, AddAssign, SubAssign}, fmt::{Display, self}, cmp::Ordering};
 
 use galois_fields::Z64;
+use num_traits::Pow;
 
-use crate::{traits::{Zero, One, WithVars}, dense_poly::ALL_VARS};
+use crate::{traits::{Zero, One, WithVars, Eval, TryEval}, dense_poly::ALL_VARS};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SparsePoly<T, const Z: usize> {
@@ -306,6 +307,20 @@ impl<T: Zero + One, const Z: usize> One for SparsePoly<T, Z> {
         }
     }
 }
+
+impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> {
+    type Output = Z64<P>;
+
+    fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
+        Some(
+            self.terms().iter().fold(
+                Zero::zero(),
+                |acc, t| acc + t.eval(x)
+            ))
+    }
+}
+
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> { }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SparseMono<T, const Z: usize> {
@@ -649,6 +664,19 @@ impl<T: One, const Z: usize> From<T> for SparseMono<T, Z> {
     }
 }
 
+impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z> {
+    type Output = Z64<P>;
+
+    fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
+        Some(self.coeff * x.iter().zip(self.powers.iter().copied()).fold(
+            Z64::one(),
+            |acc, (x, y)| acc * x.pow(y)
+        ))
+    }
+}
+
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z> { }
+
 pub struct FmtSMonomial<'a, V, const P: u64, const Z: usize> {
     m: SparseMono<Z64<P>, Z>,
     vars: &'a [V],
@@ -661,7 +689,6 @@ impl<'a, 'b, V: Display, const P: u64, const Z: usize> WithVars<'a, &'b [V; Z]> 
         FmtSMonomial{ m: *self, vars }
     }
 }
-
 
 impl<'a, V: Display, const P: u64, const Z: usize> Display for FmtSMonomial<'a, V, P, Z> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
