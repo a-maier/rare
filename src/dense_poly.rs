@@ -487,11 +487,11 @@ impl<const P: u64> Shift<Z64<P>> for DensePoly<Z64<P>> {
             let is_even_pow = (len % 2) == 1;
             for i in 0..mid {
                 let binom = binom(pow, i);
-                res_coeff[i] += coeff * binom;
-                res_coeff[pow - i] += coeff * binom;
+                res_coeff[i] += coeff * binom * shift.powu((pow - i) as u64);
+                res_coeff[pow - i] += coeff * binom * shift.powu(i as u64);
             }
             if is_even_pow {
-                res_coeff[mid] += coeff * binom(pow, mid)
+                res_coeff[mid] += coeff * binom(pow, mid) * shift.powu(mid as u64);
             }
         }
         DensePoly::from_coeff(res_coeff)
@@ -659,11 +659,17 @@ macro_rules! impl_dense_poly_recursive {
                             let is_even_pow = (len % 2) == 1;
                             for i in 0..mid {
                                 let binom = binom(pow, i);
-                                res_coeff[i] += coeff.clone() * &binom;
-                                res_coeff[pow - i] += coeff.clone() * &binom;
+                                res_coeff[i] += coeff.clone() * &(
+                                    binom * this_shift.powu((pow - i) as u64)
+                                );
+                                res_coeff[pow - i] += coeff.clone() * &(
+                                    binom * this_shift.powu(i as u64)
+                                );
                             }
                             if is_even_pow {
-                                res_coeff[mid] += coeff * &binom(pow, mid)
+                                res_coeff[mid] += coeff * &(
+                                    binom(pow, mid) * this_shift.powu(mid as u64)
+                                )
                             }
                         }
                         DensePoly::from_coeff(res_coeff)
@@ -781,6 +787,12 @@ mod tests {
             shifted,
             DensePoly::from_coeff(vec![1.into(), 2.into(), 1.into()])
         );
+
+        let shifted = orig.clone().shift(Z64::new(2));
+        assert_eq!(
+            shifted,
+            DensePoly::from_coeff(vec![4.into(), 4.into(), 1.into()])
+        );
     }
 
     #[test]
@@ -832,9 +844,15 @@ mod tests {
         eprintln!("orig: {orig}");
 
         let shifted = orig.clone().shift([1.into(), 1.into()]);
-        eprintln!("shifted: {shifted}");
+        eprintln!("shifted by 1: {shifted}");
         let poly: DensePoly<Z64<P>> = DensePoly::from_coeff(vec![1.into(), 1.into()]);
         let ref_shifted = DensePoly::from_coeff(vec![poly.clone(), poly]);
+        assert_eq!(shifted, ref_shifted);
+
+        let shifted = orig.clone().shift([2.into(), 2.into()]);
+        eprintln!("shifted by 2: {shifted}");
+        let poly: DensePoly<Z64<P>> = DensePoly::from_coeff(vec![2.into(), 1.into()]);
+        let ref_shifted = DensePoly::from_coeff(vec![poly.clone() * &Z64::new(2), poly]);
         assert_eq!(shifted, ref_shifted)
     }
 }
