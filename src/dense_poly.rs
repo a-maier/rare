@@ -1,10 +1,10 @@
-use std::{ops::{AddAssign, SubAssign, Add, Sub, Mul, MulAssign, DivAssign, Div}, fmt::{Display, self}, cmp::min};
+use std::{ops::{AddAssign, SubAssign, Add, Sub, Mul, MulAssign, DivAssign, Div}, fmt::{Display, self}, cmp::min, iter::repeat_with};
 
 use galois_fields::Z64;
 use itertools::Itertools;
 use paste::paste;
 
-use crate::traits::{Zero, One, Eval, WithVars, TryEval};
+use crate::traits::{Zero, One, Eval, WithVars, TryEval, Shift};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct DensePoly<T> {
@@ -56,16 +56,6 @@ impl<T: Zero> DensePoly<T> {
     pub fn nterms(&self) -> usize {
         self.coeff.iter().filter(|c| !c.is_zero()).count()
     }
-
-    // pub fn eval<'a, 'b, X>(&'a self, x: &'b X) -> X
-    // where
-    //     X: Zero + Mul<&'b X, Output = X> + Add<&'a T, Output = X>
-    // {
-    //     self.coeff.iter().rev().fold(
-    //         X::zero(),
-    //         |acc, c| acc * x + c
-    //     )
-    // }
 
     fn delete_trailing_zeroes(&mut self) {
         let last_nonzero = self.coeff.iter()
@@ -464,6 +454,56 @@ impl<const P: u64> Eval<Z64<P>> for DensePoly<Z64<P>> {
 impl<const P: u64> Eval<[Z64<P>; 1]> for DensePoly<Z64<P>> {
 }
 
+// TODO: would be more logical to have consistent input and return types
+fn binom<const P: u64>(n: usize, k: usize) -> Z64<P> {
+    assert!((n as u64) < P);
+    assert!((k as u64) < P);
+    let num = ((n - k + 1)..=n).fold(
+        Z64::one(),
+        |acc, i| acc * Z64::new_unchecked(i as u64)
+    );
+    let den = (1..=k).fold(
+        Z64::one(),
+        |acc, i| acc * Z64::new_unchecked(i as u64)
+    );
+    num / den
+}
+
+impl<const P: u64> Shift<Z64<P>> for DensePoly<Z64<P>> {
+    fn shift(self, shift: Z64<P>) -> Self {
+        if shift.is_zero() {
+            return self;
+        }
+        let mut res_coeff = Vec::from_iter(
+            repeat_with(|| Z64::zero()).take(self.len())
+        );
+        for (pow, coeff) in self.coeff.into_iter().enumerate().rev() {
+            if coeff.is_zero() {
+                continue;
+            }
+            assert!(pow < res_coeff.len());
+            let len = pow + 1;
+            let mid = len/ 2;
+            let is_even_pow = (len % 2) == 1;
+            for i in 0..mid {
+                let binom = binom(pow, i);
+                res_coeff[i] += coeff * binom;
+                res_coeff[pow - i] += coeff * binom;
+            }
+            if is_even_pow {
+                res_coeff[mid] += coeff * binom(pow, mid)
+            }
+        }
+        DensePoly::from_coeff(res_coeff)
+    }
+}
+
+impl<const P: u64> Shift<[Z64<P>; 1]> for DensePoly<Z64<P>> {
+    fn shift(self, shift: [Z64<P>; 1]) -> Self {
+        self.shift(shift[0])
+    }
+}
+
 impl<'a, 'b, T, S: Display> WithVars<'a, &'b [S; 1]> for DensePoly<T>
 where
     T: Display + One + Zero + 'a,
@@ -535,6 +575,7 @@ macro_rules! impl_dense_poly {
                         )
                     }
                 }
+
             }
         )*
     };
@@ -573,6 +614,60 @@ macro_rules! impl_dense_poly_recursive {
                 }
 
                 impl<const P: u64> Eval<[Z64<P>; $x]> for [<DensePoly $x>]<Z64<P>> {
+                }
+
+                impl<'a, const P: u64> MulAssign<&'a Z64<P>> for [<DensePoly $x>]<Z64<P>> {
+                    fn mul_assign(&mut self, rhs: &'a Z64<P>) {
+                        for c in &mut self.coeff {
+                            c.mul_assign(rhs);
+                        }
+                    }
+                }
+
+                impl<'a, const P: u64> Mul<&'a Z64<P>> for [<DensePoly $x>]<Z64<P>> {
+                    type Output = Self;
+
+                    fn mul(mut self, rhs: &'a Z64<P>) -> Self {
+                        self *= rhs;
+                        self
+                    }
+                }
+
+                impl<const P: u64> Shift<[Z64<P>; $x]> for [<DensePoly $x>]<Z64<P>> {
+                    fn shift(mut self, shift: [Z64<P>; $x]) -> Self {
+                        if shift.is_zero() {
+                            return self;
+                        }
+                        let (this_shift, rest) = shift.split_first().unwrap();
+                        let rest: [Z64<P>; $y] = rest.try_into().unwrap();
+                        self.coeff = self.coeff.into_iter()
+                            .map(|c| c.shift(rest))
+                            .collect();
+                        if this_shift.is_zero() {
+                            return self;
+                        }
+                        let mut res_coeff = Vec::from_iter(
+                            repeat_with(|| [<DensePoly $y>]::zero()).take(self.len())
+                        );
+                        for (pow, coeff) in self.coeff.into_iter().enumerate().rev() {
+                            if coeff.is_zero() {
+                                continue;
+                            }
+                            assert!(pow < res_coeff.len());
+                            let len = pow + 1;
+                            let mid = len / 2;
+                            let is_even_pow = (len % 2) == 1;
+                            for i in 0..mid {
+                                let binom = binom(pow, i);
+                                res_coeff[i] += coeff.clone() * &binom;
+                                res_coeff[pow - i] += coeff.clone() * &binom;
+                            }
+                            if is_even_pow {
+                                res_coeff[mid] += coeff * &binom(pow, mid)
+                            }
+                        }
+                        DensePoly::from_coeff(res_coeff)
+                    }
                 }
 
                 impl<'a, 'b, S: Display, const P: u64> WithVars<'a, &'b [S; $x]> for [<DensePoly $x>]<Z64<P>>
@@ -623,5 +718,123 @@ impl<'a, 'b, V: Display, const P: u64> Display for FmtUniPoly<'a, 'b, Z64<P>, V>
                 format!("{coeff}*{var}^{pow}")
             }
         }).join(" + "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn log_init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn shift_const() {
+        log_init();
+        const P: u64 = 29;
+
+        let orig: DensePoly<Z64<P>> = DensePoly::from_coeff(
+            vec![Z64::one()]
+        );
+
+        let unshifted = orig.clone().shift(Z64::zero());
+        assert_eq!(orig, unshifted);
+
+        let shifted = orig.clone().shift(Z64::one());
+        assert_eq!(orig, shifted);
+    }
+
+    #[test]
+    fn shift_linear() {
+        log_init();
+        const P: u64 = 29;
+
+        let orig: DensePoly<Z64<P>> = DensePoly::from_coeff(
+            vec![Z64::zero(), Z64::one()]
+        );
+
+        let unshifted = orig.clone().shift(Z64::zero());
+        assert_eq!(orig, unshifted);
+
+        let shifted = orig.clone().shift(Z64::one());
+        assert_eq!(
+            shifted,
+            DensePoly::from_coeff(vec![Z64::one(), Z64::one()])
+        );
+    }
+
+    #[test]
+    fn shift_quadratic() {
+        log_init();
+        const P: u64 = 29;
+
+        let orig: DensePoly<Z64<P>> = DensePoly::from_coeff(
+            vec![Z64::zero(), Z64::zero(), Z64::one()]
+        );
+
+        let unshifted = orig.clone().shift(Z64::zero());
+        assert_eq!(orig, unshifted);
+
+        let shifted = orig.clone().shift(Z64::one());
+        assert_eq!(
+            shifted,
+            DensePoly::from_coeff(vec![1.into(), 2.into(), 1.into()])
+        );
+    }
+
+    #[test]
+    fn shift_cubic() {
+        log_init();
+        const P: u64 = 29;
+
+        let orig: DensePoly<Z64<P>> = DensePoly::from_coeff(
+            vec![Z64::zero(), Z64::zero(), Z64::zero(), Z64::one()]
+        );
+
+        let unshifted = orig.clone().shift(Z64::zero());
+        assert_eq!(orig, unshifted);
+
+        let shifted = orig.clone().shift(Z64::one());
+        assert_eq!(
+            shifted,
+            DensePoly::from_coeff(vec![1.into(), 3.into(), 3.into(), 1.into()])
+        );
+    }
+
+   #[test]
+    fn shift_quartic() {
+        log_init();
+        const P: u64 = 29;
+
+        let mut coeff = vec![Z64::zero(); 5];
+        coeff[4] = Z64::one();
+        let orig: DensePoly<Z64<P>> = DensePoly::from_coeff(coeff);
+
+        let unshifted = orig.clone().shift(Z64::zero());
+        assert_eq!(orig, unshifted);
+
+        let shifted = orig.clone().shift(Z64::one());
+        assert_eq!(
+            shifted,
+            DensePoly::from_coeff(vec![1.into(), 4.into(), 6.into(), 4.into(), 1.into()])
+        );
+    }
+
+   #[test]
+    fn shift_2d() {
+        log_init();
+        const P: u64 = 29;
+
+        let poly: DensePoly<Z64<P>> = DensePoly::from_coeff(vec![0.into(), 1.into()]);
+        let orig = DensePoly::from_coeff(vec![Zero::zero(), poly]);
+
+        eprintln!("orig: {orig}");
+
+        let shifted = orig.clone().shift([1.into(), 1.into()]);
+        eprintln!("shifted: {shifted}");
+        let poly: DensePoly<Z64<P>> = DensePoly::from_coeff(vec![1.into(), 1.into()]);
+        let ref_shifted = DensePoly::from_coeff(vec![poly.clone(), poly]);
+        assert_eq!(shifted, ref_shifted)
     }
 }

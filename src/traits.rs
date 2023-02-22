@@ -102,3 +102,7 @@ pub trait WithVars<'a, V> {
 
     fn with_vars(&'a self, vars: V) -> Self::Output;
 }
+
+pub trait Shift<S> {
+    fn shift(self, shift: S) -> Self;
+}
