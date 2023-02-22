@@ -45,6 +45,16 @@ impl<const P: u64> Zero for Z64<P> {
     }
 }
 
+impl<T: Zero, const N: usize> Zero for [T; N] {
+    fn zero() -> Self {
+        array_init::array_init(|_| T::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.iter().all(Zero::is_zero)
+    }
+}
+
 // custom One trait that doesn't require Mul
 pub trait One {
     fn one() -> Self;
