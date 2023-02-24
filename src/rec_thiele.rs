@@ -55,6 +55,7 @@ impl ThieleRec {
         let mut y_last = y0;
         let mut n_zeroes = 0;
         for (y, f_y) in pts {
+            trace!("Adding q({y}) = {f_y}");
             if let Some(a) = a_next(&rat, y_last, y, f_y) {
                 n_zeroes = 0;
                 rat.coeffs.push((rat.a_last, y_last));
