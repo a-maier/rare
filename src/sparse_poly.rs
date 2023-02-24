@@ -2,8 +2,9 @@ use std::{ops::{Add, Neg, Sub, MulAssign, DivAssign, Mul, Div, AddAssign, SubAss
 
 use galois_fields::Z64;
 use num_traits::Pow;
+use paste::paste;
 
-use crate::{traits::{Zero, One, WithVars, Eval, TryEval}, dense_poly::ALL_VARS};
+use crate::{traits::{Zero, One, WithVars, Eval, TryEval}, dense_poly::{ALL_VARS, DensePoly}};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SparsePoly<T, const Z: usize> {
@@ -323,6 +324,98 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z
 }
 
 impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> { }
+
+impl<T: Zero> From<DensePoly<T>> for SparsePoly<T, 1> {
+    fn from(source: DensePoly<T>) -> Self {
+        let terms = source
+            .into_coeff()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(n, c)| if c.is_zero() {
+                None
+            } else {
+                Some(SparseMono::new(c, [n as u32]))
+            })
+            .collect();
+        Self { terms }
+    }
+}
+macro_rules! impl_poly_conv_rec {
+    ( $($x:literal, $y:literal), * ) => {
+        $(
+            impl<T: Zero> From<DensePoly<SparsePoly<T, $y>>> for SparsePoly<T, $x> {
+                fn from(source: DensePoly<SparsePoly<T, $y>>) -> Self {
+                    let terms = source
+                        .into_coeff()
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(_, c)| !c.is_zero())
+                        .flat_map(|(n, c)| c.into_terms().into_iter().map(move |c| (n, c)))
+                        .map(|(n, c)| {
+                            let mut pow = [0; $x];
+                            pow[1..].copy_from_slice(&c.powers);
+                            pow[0] = n as u32;
+                            SparseMono::new(c.coeff, pow)
+                        })
+                        .collect();
+                    Self { terms }
+                }
+            }
+
+            paste! {
+                use crate::dense_poly::[<DensePoly $x>];
+
+                impl<T: Zero> From<[<DensePoly $x>]<T>> for SparsePoly<T, $x> {
+                    fn from(source: [<DensePoly $x>]<T>) -> Self {
+                        let tmp: DensePoly<SparsePoly<T, $y>> = DensePoly::from_coeff_unchecked(
+                            source.into_coeff().into_iter()
+                                .map(|c| c.into())
+                                .collect()
+                        );
+                        tmp.into()
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_poly_conv_rec!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
+
+pub struct FmtSparsePoly<'a, 'b, V, const P: u64, const Z: usize> {
+    p: &'a SparsePoly<Z64<P>, Z>,
+    vars: &'b [V; Z],
+}
+
+impl<'a, 'b, V: Display + 'b, const P: u64, const Z: usize> WithVars<'a, &'b [V; Z]> for SparsePoly<Z64<P>, Z> {
+    type Output = FmtSparsePoly<'a, 'b, V, P, Z>;
+
+    fn with_vars(&'a self, vars: &'b [V; Z]) -> Self::Output {
+        FmtSparsePoly{ p: self, vars }
+    }
+}
+
+impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display for FmtSparsePoly<'a, 'b, V, P, Z> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some((first, rest)) = self.p.terms().split_first() {
+            first.with_vars(self.vars).fmt(f)?;
+            for term in rest {
+                write!(f, " + {}", term.with_vars(self.vars))?
+            }
+            Ok(())
+        } else {
+            write!(f, "0")
+        }
+    }
+}
+
+impl<const P: u64, const Z: usize> Display for SparsePoly<Z64<P>, Z> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut vars = [""; Z];
+        vars.copy_from_slice(&ALL_VARS[..Z]);
+        self.with_vars(&vars).fmt(f)
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SparseMono<T, const Z: usize> {
@@ -679,20 +772,20 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z
 
 impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z> { }
 
-pub struct FmtSMonomial<'a, V, const P: u64, const Z: usize> {
+pub struct FmtSparseMono<'a, V, const P: u64, const Z: usize> {
     m: SparseMono<Z64<P>, Z>,
     vars: &'a [V],
 }
 
 impl<'a, 'b, V: Display, const P: u64, const Z: usize> WithVars<'a, &'b [V; Z]> for SparseMono<Z64<P>, Z> {
-    type Output = FmtSMonomial<'b, V, P, Z>;
+    type Output = FmtSparseMono<'b, V, P, Z>;
 
     fn with_vars(&'a self, vars: &'b [V; Z]) -> Self::Output {
-        FmtSMonomial{ m: *self, vars }
+        FmtSparseMono{ m: *self, vars }
     }
 }
 
-impl<'a, V: Display, const P: u64, const Z: usize> Display for FmtSMonomial<'a, V, P, Z> {
+impl<'a, V: Display, const P: u64, const Z: usize> Display for FmtSparseMono<'a, V, P, Z> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.m.coeff)?;
         if !self.m.is_one() && !self.m.is_zero() {
@@ -715,4 +808,75 @@ impl<const P: u64, const Z: usize> Display for SparseMono<Z64<P>, Z> {
         vars.copy_from_slice(&ALL_VARS);
         self.with_vars(&vars).fmt(f)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::Rng;
+    use rand_xoshiro::rand_core::SeedableRng;
+
+    use super::*;
+
+    fn log_init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn conv_1d() {
+        log_init();
+
+        const NTESTS: u32 = 100;
+        const MAX_LEN: usize = 10;
+        const MAX_POW: u32 = 10 * MAX_LEN as u32;
+        const P: u64 = 61;
+
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+        for _ in 0..NTESTS {
+            let len = rng.gen_range(0..=MAX_LEN);
+            let terms: Vec<SparseMono<Z64<P>, 1>> = std::iter::repeat_with(
+                || SparseMono::new(
+                    rng.gen(),
+                    [rng.gen_range(0..=MAX_POW)]
+                )
+            ).take(len)
+                .collect();
+            let poly = SparsePoly::from_terms(terms);
+            eprintln!("original: {poly}");
+            let as_dense = DensePoly::from(poly.clone());
+            eprintln!("collected: {as_dense}");
+            let reexpanded: SparsePoly<Z64<P>, 1> = as_dense.into();
+            eprintln!("re-expanded: {reexpanded}");
+            assert_eq!(poly, reexpanded);
+        }
+    }
+
+    #[test]
+    fn conv_2d() {
+        log_init();
+
+        const NTESTS: u32 = 100;
+        const MAX_LEN: usize = 10;
+        const MAX_POW: u32 = 10;
+        const P: u64 = 61;
+
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+        for _ in 0..NTESTS {
+            let len = rng.gen_range(0..=MAX_LEN);
+            let terms: Vec<SparseMono<Z64<P>, 2>> = std::iter::repeat_with(
+                || SparseMono::new(
+                    rng.gen(),
+                    [rng.gen_range(0..=MAX_POW), rng.gen_range(0..=MAX_POW)]
+                )
+            ).take(len)
+                .collect();
+            let poly = SparsePoly::from_terms(terms);
+            eprintln!("original: {poly}");
+            let as_dense = DensePoly2::from(poly.clone());
+            eprintln!("collected: {as_dense}");
+            let reexpanded: SparsePoly<Z64<P>, 2> = as_dense.into();
+            eprintln!("re-expanded: {reexpanded}");
+            assert_eq!(poly, reexpanded);
+        }
+    }
+
 }

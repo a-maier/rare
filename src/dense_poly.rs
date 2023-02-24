@@ -4,7 +4,7 @@ use galois_fields::Z64;
 use itertools::Itertools;
 use paste::paste;
 
-use crate::traits::{Zero, One, Eval, WithVars, TryEval, Shift};
+use crate::{traits::{Zero, One, Eval, WithVars, TryEval, Shift}, sparse_poly::{SparsePoly, SparseMono}};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct DensePoly<T> {
@@ -429,6 +429,33 @@ impl<T: Zero> From<T> for DensePoly<T> {
     }
 }
 
+impl<T: Zero> From<SparsePoly<T, 1>> for DensePoly<T> {
+    fn from(p: SparsePoly<T, 1>) -> Self {
+        let orig_coeff = p.into_terms();
+        if let Some(max_pow) = orig_coeff.last().map(|c| c.powers[0]) {
+            let mut coeff = Vec::from_iter(
+                std::iter::repeat_with(|| T::zero()).take(1 + max_pow as usize)
+            );
+            for c in orig_coeff {
+                coeff[c.powers[0] as usize] = c.coeff;
+            }
+            Self::from_coeff_unchecked(coeff)
+        } else {
+            Self::zero()
+        }
+    }
+}
+
+impl<T: Zero> From<SparseMono<T, 1>> for DensePoly<T> {
+    fn from(m: SparseMono<T, 1>) -> Self {
+        let mut coeff = Vec::from_iter(
+            std::iter::repeat_with(|| T::zero()).take(1 + m.powers[0] as usize)
+        );
+        coeff[m.powers[0] as usize] = m.coeff;
+        Self::from_coeff_unchecked(coeff)
+    }
+}
+
 impl<const P: u64> TryEval<Z64<P>> for DensePoly<Z64<P>> {
     type Output = Z64<P>;
 
@@ -596,6 +623,43 @@ macro_rules! impl_dense_poly_recursive {
                                 [<DensePoly $y>]::from(z)
                             ])
                         }
+                    }
+                }
+
+                impl<T: AddAssign + Zero> From<SparsePoly<T, $x>> for [<DensePoly $x>]<T> {
+                    fn from(p: SparsePoly<T, $x>) -> Self {
+                        let orig_coeff = p.into_terms();
+                        if let Some(max_pow) = orig_coeff.last().map(|c| c.powers[0]) {
+                            let mut res_coeff = Vec::from_iter(
+                                std::iter::repeat_with(|| Zero::zero()).take(1 + max_pow as usize)
+                            );
+                            // TODO: this is not very efficient (lots of allocations)
+                            // it's probably better to try and convert all monomials
+                            // with the same power[0] at once.
+                            for SparseMono{coeff, powers} in orig_coeff {
+                                let rest = SparseMono::new(
+                                    coeff,
+                                    powers[1..].try_into().unwrap()
+                                );
+                                res_coeff[powers[0] as usize] += [<DensePoly $y>]::<T>::from(rest)
+                            }
+                            Self::from_coeff_unchecked(res_coeff)
+                        } else {
+                            Self::zero()
+                        }
+                    }
+                }
+
+                impl<T: Zero> From<SparseMono<T, $x>> for [<DensePoly $x>]<T> {
+                    fn from(m: SparseMono<T, $x>) -> Self {
+                        let (&pow, rest) = m.powers.split_first().unwrap();
+                        let rest: [u32; $y] = rest.try_into().unwrap();
+                        let rest = SparseMono::new(m.coeff, rest);
+                        let mut res_coeff = Vec::from_iter(
+                            std::iter::repeat_with(|| Zero::zero()).take(1 + pow as usize)
+                        );
+                        res_coeff[pow as usize] = [<DensePoly $y>]::from(rest);
+                        Self::from_coeff_unchecked(res_coeff)
                     }
                 }
 
