@@ -83,6 +83,34 @@ impl One for NonZeroUsize {
     }
 }
 
+macro_rules! impl_zero_one {
+    ( $( $x:ty ),* ) => {
+        $(
+            impl Zero for $x {
+                fn zero() -> Self {
+                    num_traits::Zero::zero()
+                }
+
+                fn is_zero(&self) -> bool {
+                    num_traits::Zero::is_zero(self)
+                }
+            }
+
+            impl One for $x {
+                fn one() -> Self {
+                    num_traits::One::one()
+                }
+
+                fn is_one(&self) -> bool {
+                    num_traits::One::is_one(self)
+                }
+            }
+        )*
+    };
+}
+
+impl_zero_one!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64);
+
 pub trait Cardinality {
     fn cardinality()-> Option<usize>;
 }
