@@ -47,7 +47,9 @@ impl<T: AddAssign + Zero, const Z: usize> SparsePoly<T, Z> {
                 if t.powers == res_terms[last_idx].powers {
                     res_terms[last_idx].coeff += t.coeff
                 } else if res_terms[last_idx].is_zero() {
-                    res_terms.pop();
+                    res_terms[last_idx] = t;
+                } else {
+                    res_terms.push(t);
                 }
             }
             if res_terms[res_terms.len() - 1].is_zero() {
