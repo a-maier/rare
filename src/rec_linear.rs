@@ -62,7 +62,7 @@ impl LinearRec {
             return None;
         }
         let eqs = Matrix::from_vec(ncoeffs, eqs);
-        let mut coeffs = gauss_solve(eqs, rhs).unwrap();
+        let mut coeffs = gauss_solve(eqs, rhs)?;
         let mut den_coeffs = Vec::with_capacity(usize::from(self.den_len));
         den_coeffs.push(One::one());
         den_coeffs.extend_from_slice(&coeffs[self.num_len..]);
