@@ -26,6 +26,10 @@ impl<N, D> Rat<N, D> {
     pub fn den(&self) -> &D {
         &self.den
     }
+
+    pub fn into_num_den(self) -> (N, D) {
+        (self.num, self.den)
+    }
 }
 
 impl<N: Zero, D: One> Rat<N, D> {
