@@ -4,7 +4,7 @@ use log::{debug, trace};
 use galois_fields::{Z64, TryDiv};
 use rand::{Rng, thread_rng};
 
-use crate::{traits::{Zero, One, WithVars, Rec, TryEval}, dense_rat::Rat, dense_poly::DensePoly, rand::pt_iter};
+use crate::{traits::{Zero, One, WithVars, Rec, TryEval}, rat::Rat, dense_poly::DensePoly, rand::pt_iter};
 
 /// Univariate rational function reconstruction using Thiele interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]

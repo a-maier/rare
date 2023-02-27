@@ -4,7 +4,7 @@ use galois_fields::Z64;
 use log::debug;
 use num_traits::Inv;
 
-use crate::{matrix::Matrix, traits::{Zero, One, Rec}, dense_poly::DensePoly, dense_rat::Rat, rand::pt_iter};
+use crate::{matrix::Matrix, traits::{Zero, One, Rec}, dense_poly::DensePoly, rat::Rat, rand::pt_iter};
 
 /// Reconstruct a rational function by solving linear systems of equations
 ///
