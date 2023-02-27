@@ -7,3 +7,4 @@ pub mod sparse_poly;
 pub mod traits;
 pub mod rec_linear;
 mod matrix;
+mod rec_rat;
