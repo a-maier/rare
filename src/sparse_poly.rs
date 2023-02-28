@@ -27,6 +27,10 @@ impl<T, const Z: usize> SparsePoly<T, Z> {
     pub fn into_terms(self) -> Vec<SparseMono<T, Z>> {
         self.terms
     }
+
+    pub fn term(&self, i: usize) -> &SparseMono<T, Z> {
+        &self.terms[i]
+    }
 }
 
 impl<T: Zero, const Z: usize> SparsePoly<T, Z> {
