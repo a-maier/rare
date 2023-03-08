@@ -51,10 +51,11 @@ impl RatRec {
 
         let mut rec = RecHelper::new(pt, self.extra_pts, base_coord, shift);
         use NumOrDen::*;
-        let mut num_rec = rec.rec(|x| f(x), Num)?;
+        let num_rec = rec.rec(|x| f(x), Num)?;
         debug!("Reconstructed numerator: {num_rec}");
-        let mut den_rec = rec.rec(|x| f(x), Den)?;
+        let den_rec = rec.rec(|x| f(x), Den)?;
         debug!("Reconstructed denominator: {den_rec}");
+        let [mut num_rec, mut den_rec] = rec.into_rec();
 
         // fix normalisation
         let norm = den_rec.term(0).coeff.inv();
@@ -145,6 +146,10 @@ struct RecHelper<const P: u64> {
     base_coord: [Z64<P>; N],
     shift: [Z64<P>; N],
     subtr: ShiftSubtraction<P>,
+    num: SparsePoly<Z64<P>, N>,
+    den: SparsePoly<Z64<P>, N>,
+    num_coeff_known: usize,
+    den_coeff_known: usize,
 }
 
 impl<const P: u64> RecHelper<P> {
@@ -159,7 +164,7 @@ impl<const P: u64> RecHelper<P> {
             extra_pts,
             base_coord,
             shift,
-            subtr: Default::default(),
+            ..Default::default()
         }
     }
 
@@ -167,7 +172,7 @@ impl<const P: u64> RecHelper<P> {
         &mut self,
         mut f: F,
         wot: NumOrDen
-    ) -> Option<SparsePoly<Z64<P>, N>>
+    ) -> Option<&SparsePoly<Z64<P>, N>>
     where F: FnMut([Z64<P>; N]) -> Option<Z64<P>>
     {
         debug!("Reconstruct {wot:?} coefficients");
@@ -176,11 +181,9 @@ impl<const P: u64> RecHelper<P> {
 
         let nnum = self.known_pts[0].num_coeff.len();
         let nden = self.known_pts[0].den_coeff.len();
-        let den_terms = NonZeroUsize::new(1 + nden).unwrap();
-        // on to the meat:
+         // on to the meat:
         // iteratively reconstruct the highest-degree polynomial in the numerator / denominator
         // storing also the results for all other coefficients for later use
-        let mut rec: SparsePoly<_, N> = Zero::zero();
         let max_idx = match wot {
             Num => nnum,
             Den => usize::from(nden)
@@ -200,12 +203,12 @@ impl<const P: u64> RecHelper<P> {
 
             let first_pt = known.next().unwrap();
             let mut next_offset = first_pt.0;
-            let mut next_val = first_pt.1;
+            let coord = add(base_x_coord, next_offset);
+            let subtr = self.subtr.eval(wot, coeff_idx, &coord);
+            trace!("Subtraction from shift: {subtr}");
+            let mut next_val = first_pt.1 - subtr;
             loop {
                 let coord = add(base_x_coord, next_offset);
-                let subtr = self.subtr.eval(wot, coeff_idx, &coord);
-                trace!("Subtraction from shift: {subtr}");
-                next_val -= subtr;
                 match poly.add_pt(&coord, next_val) {
                     ControlFlow::Continue(n) => {
                         next_offset[n] += Z64::one();
@@ -224,7 +227,10 @@ impl<const P: u64> RecHelper<P> {
                         match known.peek() {
                             Some((offset, val)) if offset == &next_offset => {
                                 trace!("Using known value at offset {next_offset:?}: {val}");
-                                next_val = *val;
+                                let coord = add(base_x_coord, next_offset);
+                                let subtr = self.subtr.eval(wot, coeff_idx, &coord);
+                                trace!("Subtraction from shift: {subtr}");
+                                next_val = *val - subtr;
                             },
                             _ => {
                                 trace!("Need new value at offset {next_offset:?}");
@@ -232,14 +238,26 @@ impl<const P: u64> RecHelper<P> {
                                 for (x, s) in coord[..M].iter_mut().zip(next_offset.iter()) {
                                     *x += s;
                                 }
-                                let eval_pts = transformed_coord_iter(coord, self.shift);
 
-                                // TODO: don't reconstruct the already known coefficients
-                                let linear_rec = LinearRec::new(nnum, den_terms);
-                                let rat = linear_rec.rec_from_seq(
-                                    eval_pts.filter_map(|(t, z)| f(z).map(|v| (t, v)))
+                                let eval_pts = transformed_coord_iter(coord, self.shift);
+                                let linear_rec = LinearRec::new(
+                                    nnum - self.num_coeff_known,
+                                    NonZeroUsize::new(nden - self.den_coeff_known).unwrap()
+                                );
+                                trace!("Known numerator: {}", self.num);
+                                let rat = linear_rec.rec_from_seq_with_subtr(
+                                    eval_pts.filter_map(|(t, z)| {
+                                        f(z).map(
+                                            |f_z| {
+                                                let sub = self.num.eval(&z) - f_z * self.den.eval(&z);
+                                                trace!("Subtraction for {z:?}: {sub}");
+                                                (t, f_z, sub)
+                                            }
+                                        )
+                                     }),
                                 )?;
                                 trace!("From rational reconstruction in t: {}", rat.with_vars(&["t"]));
+
                                 next_val = match wot {
                                     Num => *rat.num().coeff(coeff_idx),
                                     Den => *rat.den().coeff(coeff_idx),
@@ -269,13 +287,29 @@ impl<const P: u64> RecHelper<P> {
                         if !self.shift.is_zero() {
                             self.add_shift_subtr_from(wot, rec_poly.clone());
                         }
-                        rec += rec_poly;
+                        match wot {
+                            Num => {
+                                self.num += rec_poly;
+                                self.num_coeff_known += 1
+                            },
+                            Den => {
+                                self.den += rec_poly;
+                                self.den_coeff_known += 1
+                            },
+                        };
                         break;
                     },
                 }
             }
         }
-        Some(rec)
+        match wot {
+            NumOrDen::Num => {
+                Some(&self.num)
+            },
+            NumOrDen::Den => {
+                Some(&self.den)
+            },
+        }
     }
 
     fn add_shift_subtr_from(
@@ -301,6 +335,10 @@ impl<const P: u64> RecHelper<P> {
         let subtr = DensePoly2::from(subtr);
         trace!("shift subtraction in [t, x1, ...]: {subtr}");
         self.subtr.add_subtr(wot, subtr);
+    }
+
+    pub(crate) fn into_rec(self) -> [SparsePoly<Z64<P>, N>; 2] {
+        [self.num, self.den]
     }
 }
 
