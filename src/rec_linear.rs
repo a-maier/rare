@@ -1,7 +1,7 @@
 use std::{ops::{MulAssign, Mul, SubAssign}, num::NonZeroUsize};
 
 use galois_fields::Z64;
-use log::debug;
+use log::{debug, trace};
 use num_traits::Inv;
 
 use crate::{matrix::Matrix, traits::{Zero, One, Rec}, dense_poly::DensePoly, rat::Rat, rand::pt_iter};
@@ -38,21 +38,25 @@ impl LinearRec {
     ) -> Option<Rat<DensePoly<Z64<P>>>>
     where I: IntoIterator<Item = (Z64<P>, Z64<P>)>
     {
+        if self.num_len == 0 {
+            return Some(Zero::zero());
+        }
         self.rec_from_seq_with_subtr(
             pts.into_iter().map(|(x, q_x)| (x, q_x, Z64::zero()))
         )
     }
 
-    pub fn rec_from_seq_with_subtr<I, const P: u64>(
+    pub(crate) fn rec_from_seq_with_subtr<I, const P: u64>(
         &self,
         pts: I
     ) -> Option<Rat<DensePoly<Z64<P>>>>
     where I: IntoIterator<Item = (Z64<P>, Z64<P>, Z64<P>)>
     {
-        debug!("1d rational function reconstruction with known degrees");
-        if self.num_len == 0 {
-            return Some(Zero::zero());
-        }
+        debug!(
+            "1d rational function reconstruction with known degrees {}/{}",
+            self.num_len as i64 - 1,
+            usize::from(self.den_len) - 1
+        );
         let ncoeffs = self.num_len + usize::from(self.den_len) - 1;
         let mut eqs = Vec::with_capacity(ncoeffs * ncoeffs);
         let mut rhs = Vec::with_capacity(ncoeffs);
@@ -73,6 +77,7 @@ impl LinearRec {
             return None;
         }
         let eqs = Matrix::from_vec(ncoeffs, eqs);
+        trace!("Solving system\n{eqs} == {rhs:?}");
         let mut coeffs = gauss_solve(eqs, rhs)?;
         let mut den_coeffs = Vec::with_capacity(usize::from(self.den_len));
         den_coeffs.push(One::one());
