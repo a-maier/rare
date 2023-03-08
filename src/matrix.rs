@@ -15,8 +15,12 @@ pub(crate) struct Matrix<T> {
 
 impl<T> Matrix<T> {
     pub(crate) fn from_vec(nrows: usize, elem: Vec<T>) -> Self {
-        assert_eq!(elem.len() % nrows, 0);
-        let ncols = elem.len() / nrows;
+        assert!(elem.len() == 0 || elem.len() % nrows == 0);
+        let ncols = if elem.len() == 0 {
+            0
+        } else {
+            elem.len() / nrows
+        };
         Self {
             nrows,
             ncols,
