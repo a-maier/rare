@@ -4,7 +4,7 @@
 //       - nalgebra uses column-major storage
 //       - grid can't do it
 
-use std::ops::{Index, IndexMut};
+use std::{ops::{Index, IndexMut}, fmt::{Display, self}};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(crate) struct Matrix<T> {
@@ -73,5 +73,31 @@ impl<T> IndexMut<(usize, usize)> for Matrix<T> {
         let (row, col) = index;
         let row_length = self.ncols();
         &mut self.elem[row * row_length + col]
+    }
+}
+
+impl<T: Display> Display for Matrix<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.nrows() {
+            0 => writeln!(f, "[]"),
+            1 => {
+                write!(f, "[" )?;
+                for e in &self.elem {
+                    write!(f, " {e}" )?;
+                }
+                writeln!(f, " ]" )
+            },
+            _ => {
+                for row in 0..self.nrows() {
+                    write!(f, "|" )?;
+                    let start_idx = row * self.ncols;
+                    for e in &self.elem[start_idx..(start_idx + self.ncols())] {
+                        write!(f, " {e}" )?;
+                    }
+                    writeln!(f, " |" )?;
+                }
+                Ok(())
+            }
+        }
     }
 }
