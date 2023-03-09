@@ -3,11 +3,9 @@ use std::{ops::{AddAssign, ControlFlow}, num::NonZeroUsize};
 use galois_fields::Z64;
 use log::{debug, trace};
 use rand::Rng;
+use paste::paste;
 
-use crate::{sparse_poly::{SparsePoly, SparseMono}, traits::{Eval, Rec, WithVars, Zero, One, Shift}, rat::Rat, rec_thiele::ThieleRec, dense_poly::{DensePoly, DensePoly1, DensePoly2}, rec_newton::NewtonPolyRec, rec_linear::LinearRec};
-
-const N: usize = 2;
-const M: usize = 1;
+use crate::{sparse_poly::{SparsePoly, SparseMono}, traits::{Eval, Rec, WithVars, Zero, One, Shift}, rat::Rat, rec_thiele::ThieleRec, dense_poly::{DensePoly, DensePoly1}, rec_linear::LinearRec};
 
 /// Rational function reconstruction
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -15,54 +13,75 @@ pub struct RatRec {
     extra_pts: usize
 }
 
+trait RecWithRanAndShift<const N: usize> {
+    fn rec_with_ran_and_shift<F, const P: u64>(
+        &self,
+        f: F,
+        rng: impl Rng,
+        shift: [Z64<P>; N],
+    ) -> Option<Rat<SparsePoly<Z64<P>, N>>>
+    where F: FnMut([Z64<P>; N]) -> Option<Z64<P>>;
+}
+
 impl RatRec {
     pub fn new(extra_pts: usize) -> Self {
         Self { extra_pts }
     }
+}
 
-    fn rec_with_ran_and_shift<F, const P: u64>(
-        &self,
-        mut f: F,
-        mut rng: impl Rng,
-        shift: [Z64<P>; N],
-    ) -> Option<Rat<SparsePoly<Z64<P>, N>>>
-    where F: FnMut([Z64<P>; N]) -> Option<Z64<P>>
-    {
-        debug!("Shift: {shift:?}");
 
-        // initial [x0, x1, ..., t]
-        let base_coord: [Z64<P>; N] = rng.gen();
-        debug!("Starting multivariate rational reconstruction with base point {base_coord:?}");
+macro_rules! impl_rec_with_ran_and_shift {
+    ( $($x:literal, $y:literal), * ) => {
+        $(
+            paste! {
+                impl RecWithRanAndShift<$x> for RatRec {
+                    fn rec_with_ran_and_shift<F, const P: u64>(
+                        &self,
+                        mut f: F,
+                        mut rng: impl Rng,
+                        shift: [Z64<P>; $x],
+                    ) -> Option<Rat<SparsePoly<Z64<P>, $x>>>
+                    where F: FnMut([Z64<P>; $x]) -> Option<Z64<P>>
+                    {
+                        debug!("Shift: {shift:?}");
 
-        // varying t while keeping x0, ... fixed
-        let coord = transformed_coord_iter(base_coord, shift);
+                        // initial [x0, x1, ..., t]
+                        let base_coord: [Z64<P>; $x] = rng.gen();
+                        debug!("Starting multivariate rational reconstruction with base point {base_coord:?}");
 
-        // reconstruct in t
-        let thiele_rec = ThieleRec::new(self.extra_pts);
-        let rat = thiele_rec.rec_from_seq(
-            coord.filter_map(|(t, z)| f(z).map(|v| (t, v)))
-        )?;
-        let rat: Rat<_> = rat.into();
-        debug!("From Thiele reconstruction: {}", rat.with_vars(&["t"]));
-        debug_assert!(!rat.den().coeff(0).is_zero());
+                        // varying t while keeping x0, ... fixed
+                        let coord = transformed_coord_iter(base_coord, shift);
 
-        // first point to be used for starting the reconstruction
-        let pt = RatPt::<P, M>::new([Z64::zero(); M], rat);
+                        // reconstruct in t
+                        let thiele_rec = ThieleRec::new(self.extra_pts);
+                        let rat = thiele_rec.rec_from_seq(
+                            coord.filter_map(|(t, z)| f(z).map(|v| (t, v)))
+                        )?;
+                        let rat: Rat<_> = rat.into();
+                        debug!("From Thiele reconstruction: {}", rat.with_vars(&["t"]));
+                        debug_assert!(!rat.den().coeff(0).is_zero());
 
-        let mut rec = RecHelper::new(pt, self.extra_pts, base_coord, shift);
-        use NumOrDen::*;
-        let num_rec = rec.rec(|x| f(x), Num)?;
-        debug!("Reconstructed numerator: {num_rec}");
-        let den_rec = rec.rec(|x| f(x), Den)?;
-        debug!("Reconstructed denominator: {den_rec}");
-        let [mut num_rec, mut den_rec] = rec.into_rec();
+                        // first point to be used for starting the reconstruction
+                        let pt = RatPt::<P, $y>::new([Z64::zero(); $y], rat);
 
-        // fix normalisation
-        let norm = den_rec.term(0).coeff.inv();
-        num_rec *= &norm;
-        den_rec *= &norm;
-        Some(Rat::from_num_den_unchecked(num_rec, den_rec))
-    }
+                        let mut rec = [<RecHelper $x>]::new(pt, self.extra_pts, base_coord, shift);
+                        use NumOrDen::*;
+                        let num_rec = rec.rec(|x| f(x), Num)?;
+                        debug!("Reconstructed numerator: {num_rec}");
+                        let den_rec = rec.rec(|x| f(x), Den)?;
+                        debug!("Reconstructed denominator: {den_rec}");
+                        let [mut num_rec, mut den_rec] = rec.into_rec();
+
+                        // fix normalisation
+                        let norm = den_rec.term(0).coeff.inv();
+                        num_rec *= &norm;
+                        den_rec *= &norm;
+                        Some(Rat::from_num_den_unchecked(num_rec, den_rec))
+                    }
+                }
+            }
+        )*
+    };
 }
 
 // transform from [x0, x1, ..., t] to
@@ -115,22 +134,29 @@ where F: FnMut([Z64<P>; N]) -> Option<Z64<P>>
     unreachable!()
 }
 
-impl<F, const P: u64> Rec<RatRec, [Z64<P>; N]> for F
-where F: FnMut([Z64<P>; N]) -> Option<Z64<P>> {
-    type Output = Option<Rat<SparsePoly<Z64<P>, N>>>;
+macro_rules! impl_rec_with_ran {
+    ( $($x:literal), *) => {
+        $(
 
-    fn rec_with_ran(
-        &mut self,
-        rec: RatRec,
-        mut rng: impl Rng
-    ) -> Self::Output {
-        let shift = find_shift(|z| (self)(z), &mut rng);
-        rec.rec_with_ran_and_shift(
-            |z| (self)(z),
-            rng,
-            shift
-        )
-    }
+            impl<F, const P: u64> Rec<RatRec, [Z64<P>; $x]> for F
+            where F: FnMut([Z64<P>; $x]) -> Option<Z64<P>> {
+                type Output = Option<Rat<SparsePoly<Z64<P>, $x>>>;
+
+                fn rec_with_ran(
+                    &mut self,
+                    rec: RatRec,
+                    mut rng: impl Rng
+                ) -> Self::Output {
+                    let shift = find_shift(|z| (self)(z), &mut rng);
+                    rec.rec_with_ran_and_shift(
+                        |z| (self)(z),
+                        rng,
+                        shift
+                    )
+                }
+            }
+        )*
+    };
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -139,245 +165,256 @@ enum NumOrDen {
     Den
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct RecHelper<const P: u64> {
-    known_pts: Vec<RatPt<P, M>>,
-    extra_pts: usize,
-    base_coord: [Z64<P>; N],
-    shift: [Z64<P>; N],
-    subtr: ShiftSubtraction<P>,
-    num: SparsePoly<Z64<P>, N>,
-    den: SparsePoly<Z64<P>, N>,
-    num_coeff_known: usize,
-    den_coeff_known: usize,
-}
+macro_rules! impl_rec_helper {
+    ( $($x:literal, $y:literal), * ) => {
+        $(
+            paste! {
+                use crate::dense_poly::[<DensePoly $x>];
+                use crate::rec_newton::[<NewtonPolyRec $y>];
 
-impl<const P: u64> RecHelper<P> {
-    fn new(
-        first_pt: RatPt<P, M>,
-        extra_pts: usize,
-        base_coord: [Z64<P>; N],
-        shift: [Z64<P>; N],
-    ) -> Self {
-        Self {
-            known_pts: vec![first_pt],
-            extra_pts,
-            base_coord,
-            shift,
-            ..Default::default()
-        }
-    }
+                #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                struct [<RecHelper $x>]<const P: u64> {
+                    known_pts: Vec<RatPt<P, $y>>,
+                    extra_pts: usize,
+                    base_coord: [Z64<P>; $x],
+                    shift: [Z64<P>; $x],
+                    subtr: [<ShiftSubtraction $x>]<P>,
+                    num: SparsePoly<Z64<P>, $x>,
+                    den: SparsePoly<Z64<P>, $x>,
+                    num_coeff_known: usize,
+                    den_coeff_known: usize,
+                }
 
-    fn rec<F>(
-        &mut self,
-        mut f: F,
-        wot: NumOrDen
-    ) -> Option<&SparsePoly<Z64<P>, N>>
-    where F: FnMut([Z64<P>; N]) -> Option<Z64<P>>
-    {
-        debug!("Reconstruct {wot:?} coefficients");
-        use NumOrDen::*;
-        let base_x_coord: [Z64<P>; M] = self.base_coord[..M].try_into().unwrap();
+                impl<const P: u64> [<RecHelper $x>]<P> {
+                    fn new(
+                        first_pt: RatPt<P, $y>,
+                        extra_pts: usize,
+                        base_coord: [Z64<P>; $x],
+                        shift: [Z64<P>; $x],
+                    ) -> Self {
+                        Self {
+                            known_pts: vec![first_pt],
+                            extra_pts,
+                            base_coord,
+                            shift,
+                            ..Default::default()
+                        }
+                    }
 
-        let nnum = self.known_pts[0].num_coeff.len();
-        let nden = self.known_pts[0].den_coeff.len();
-         // on to the meat:
-        // iteratively reconstruct the highest-degree polynomial in the numerator / denominator
-        // storing also the results for all other coefficients for later use
-        let max_idx = match wot {
-            Num => nnum,
-            Den => usize::from(nden)
-        };
-        for coeff_idx in (0..max_idx).rev() {
-            debug!("Reconstruct coefficient of t^{coeff_idx}");
-            let mut poly = NewtonPolyRec::<P>::new(self.extra_pts);
-            // what do we know at this point?
-            // TODO: maybe use a BTreeMap so we don't have to sort?
-            self.known_pts.sort_unstable();
-            let known = self.known_pts.iter();
-            let known: Vec<_> = match wot {
-                    Num => known.map(|pt| (pt.offset, pt.num_coeff[coeff_idx])).collect(),
-                    Den => known.map(|pt| (pt.offset, pt.den_coeff[coeff_idx])).collect(),
-            };
-            let mut known = known.iter().peekable();
+                    fn rec<F>(
+                        &mut self,
+                        mut f: F,
+                        wot: NumOrDen
+                    ) -> Option<&SparsePoly<Z64<P>, $x>>
+                    where F: FnMut([Z64<P>; $x]) -> Option<Z64<P>>
+                    {
+                        debug!("Reconstruct {wot:?} coefficients");
+                        use NumOrDen::*;
+                        let base_x_coord: [Z64<P>; $y] = self.base_coord[..$y].try_into().unwrap();
 
-            let first_pt = known.next().unwrap();
-            let mut next_offset = first_pt.0;
-            let coord = add(base_x_coord, next_offset);
-            let subtr = self.subtr.eval(wot, coeff_idx, &coord);
-            trace!("Subtraction from shift: {subtr}");
-            let mut next_val = first_pt.1 - subtr;
-            loop {
-                let coord = add(base_x_coord, next_offset);
-                match poly.add_pt(&coord, next_val) {
-                    ControlFlow::Continue(n) => {
-                        next_offset[n] += Z64::one();
-                        next_offset[(n + 1)..].fill(Z64::zero());
-                        // skip known points with a lesser offset
-                        // they are not needed for this reconstruction
-                        // TODO: some way to do this with `skip_while`?
-                        while let Some((offset, _)) = known.peek() {
-                            if offset < &next_offset {
-                                known.next();
-                            } else {
-                                break;
+                        let nnum = self.known_pts[0].num_coeff.len();
+                        let nden = self.known_pts[0].den_coeff.len();
+                        // on to the meat:
+                        // iteratively reconstruct the highest-degree polynomial in the numerator / denominator
+                        // storing also the results for all other coefficients for later use
+                        let max_idx = match wot {
+                            Num => nnum,
+                            Den => usize::from(nden)
+                        };
+                        for coeff_idx in (0..max_idx).rev() {
+                            debug!("Reconstruct coefficient of t^{coeff_idx}");
+                            let mut poly = [<NewtonPolyRec $y>]::<P>::new(self.extra_pts);
+                            // what do we know at this point?
+                            // TODO: maybe use a BTreeMap so we don't have to sort?
+                            self.known_pts.sort_unstable();
+                            let known = self.known_pts.iter();
+                            let known: Vec<_> = match wot {
+                                Num => known.map(|pt| (pt.offset, pt.num_coeff[coeff_idx])).collect(),
+                                Den => known.map(|pt| (pt.offset, pt.den_coeff[coeff_idx])).collect(),
+                            };
+                            let mut known = known.iter().peekable();
+
+                            let first_pt = known.next().unwrap();
+                            let mut next_offset = first_pt.0;
+                            let coord = add(base_x_coord, next_offset);
+                            let subtr = self.subtr.eval(wot, coeff_idx, &coord);
+                            trace!("Subtraction from shift: {subtr}");
+                            let mut next_val = first_pt.1 - subtr;
+                            loop {
+                                let coord = add(base_x_coord, next_offset);
+                                match poly.add_pt(&coord, next_val) {
+                                    ControlFlow::Continue(n) => {
+                                        next_offset[n] += Z64::one();
+                                        next_offset[(n + 1)..].fill(Z64::zero());
+                                        // skip known points with a lesser offset
+                                        // they are not needed for this reconstruction
+                                        // TODO: some way to do this with `skip_while`?
+                                        while let Some((offset, _)) = known.peek() {
+                                            if offset < &next_offset {
+                                                known.next();
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        // TODO: accept points with larger offset in the same coordinate
+                                        match known.peek() {
+                                            Some((offset, val)) if offset == &next_offset => {
+                                                trace!("Using known value at offset {next_offset:?}: {val}");
+                                                let coord = add(base_x_coord, next_offset);
+                                                let subtr = self.subtr.eval(wot, coeff_idx, &coord);
+                                                trace!("Subtraction from shift: {subtr}");
+                                                next_val = *val - subtr;
+                                            },
+                                            _ => {
+                                                trace!("Need new value at offset {next_offset:?}");
+                                                let mut coord = self.base_coord;
+                                                for (x, s) in coord[..$y].iter_mut().zip(next_offset.iter()) {
+                                                    *x += s;
+                                                }
+
+                                                let eval_pts = transformed_coord_iter(coord, self.shift);
+                                                let linear_rec = LinearRec::new(
+                                                    nnum - self.num_coeff_known,
+                                                    NonZeroUsize::new(nden - self.den_coeff_known).unwrap()
+                                                );
+                                                trace!("Known numerator: {}", self.num);
+                                                let rat = linear_rec.rec_from_seq_with_subtr(
+                                                    eval_pts.filter_map(|(t, z)| {
+                                                        f(z).map(
+                                                            |f_z| {
+                                                                let sub = self.num.eval(&z) - f_z * self.den.eval(&z);
+                                                                trace!("Subtraction for {z:?}: {sub}");
+                                                                (t, f_z, sub)
+                                                            }
+                                                        )
+                                                    }),
+                                                )?;
+                                                trace!("From rational reconstruction in t: {}", rat.with_vars(&["t"]));
+
+                                                next_val = match wot {
+                                                    Num => *rat.num().coeff(coeff_idx),
+                                                    Den => *rat.den().coeff(coeff_idx),
+                                                };
+                                                let pt = RatPt::<P, $y>::new(next_offset, rat);
+
+                                                self.known_pts.push(pt);
+                                            },
+                                        }
+
+                                    },
+                                    ControlFlow::Break(()) => {
+                                        let rec_poly: [<DensePoly $y>]<Z64<P>> = poly.into_poly().into();
+                                        // turn it back from a polynomial in [x0, x1, ..., t] to [z0, z1, ...]
+                                        // first expand it out
+                                        let rec_poly: SparsePoly<Z64<P>, $y> = rec_poly.into();
+                                        // rescale, adding back the power in t
+                                        let terms = rec_poly.into_terms().into_iter()
+                                            .map(|c| {
+                                                let mut powers = [0; $x];
+                                                powers[0..$y].copy_from_slice(&c.powers);
+                                                powers[$y] = coeff_idx as u32 - c.powers.iter().sum::<u32>();
+                                                SparseMono::new(c.coeff, powers)
+                                            });
+                                        let rec_poly = SparsePoly::from_terms(terms.collect());
+                                        debug!("Reconstructed numerator contribution {rec_poly}");
+                                        if !self.shift.is_zero() {
+                                            self.add_shift_subtr_from(wot, rec_poly.clone());
+                                        }
+                                        match wot {
+                                            Num => {
+                                                self.num += rec_poly;
+                                                self.num_coeff_known += 1
+                                            },
+                                            Den => {
+                                                self.den += rec_poly;
+                                                self.den_coeff_known += 1
+                                            },
+                                        };
+                                        break;
+                                    },
+                                }
                             }
                         }
-                        // TODO: accept points with larger offset in the same coordinate
-                        match known.peek() {
-                            Some((offset, val)) if offset == &next_offset => {
-                                trace!("Using known value at offset {next_offset:?}: {val}");
-                                let coord = add(base_x_coord, next_offset);
-                                let subtr = self.subtr.eval(wot, coeff_idx, &coord);
-                                trace!("Subtraction from shift: {subtr}");
-                                next_val = *val - subtr;
+                        match wot {
+                            NumOrDen::Num => {
+                                Some(&self.num)
                             },
-                            _ => {
-                                trace!("Need new value at offset {next_offset:?}");
-                                let mut coord = self.base_coord;
-                                for (x, s) in coord[..M].iter_mut().zip(next_offset.iter()) {
-                                    *x += s;
-                                }
-
-                                let eval_pts = transformed_coord_iter(coord, self.shift);
-                                let linear_rec = LinearRec::new(
-                                    nnum - self.num_coeff_known,
-                                    NonZeroUsize::new(nden - self.den_coeff_known).unwrap()
-                                );
-                                trace!("Known numerator: {}", self.num);
-                                let rat = linear_rec.rec_from_seq_with_subtr(
-                                    eval_pts.filter_map(|(t, z)| {
-                                        f(z).map(
-                                            |f_z| {
-                                                let sub = self.num.eval(&z) - f_z * self.den.eval(&z);
-                                                trace!("Subtraction for {z:?}: {sub}");
-                                                (t, f_z, sub)
-                                            }
-                                        )
-                                     }),
-                                )?;
-                                trace!("From rational reconstruction in t: {}", rat.with_vars(&["t"]));
-
-                                next_val = match wot {
-                                    Num => *rat.num().coeff(coeff_idx),
-                                    Den => *rat.den().coeff(coeff_idx),
-                                };
-                                let pt = RatPt::<P, M>::new(next_offset, rat);
-
-                                self.known_pts.push(pt);
+                            NumOrDen::Den => {
+                                Some(&self.den)
                             },
                         }
+                    }
 
-                    },
-                    ControlFlow::Break(()) => {
-                        let rec_poly: DensePoly1<Z64<P>> = poly.into_poly().into();
-                        // turn it back from a polynomial in [x0, x1, ..., t] to [z0, z1, ...]
-                        // first expand it out
-                        let rec_poly: SparsePoly<Z64<P>, M> = rec_poly.into();
-                        // rescale, adding back the power in t
-                        let terms = rec_poly.into_terms().into_iter()
+                    fn add_shift_subtr_from(
+                        &mut self,
+                        wot: NumOrDen,
+                        poly: SparsePoly<Z64<P>, $x>
+                    ) {
+                        // calculate P(z + s) - P(Z)
+                        let collected = [<DensePoly $x>]::from(poly);
+                        let shifted = collected.clone().shift(self.shift);
+                        let subtr = shifted - &collected;
+                        trace!("shift subtraction in z: {subtr}");
+                        // turn it into a polynomial in [t, x0, x1, ...]
+                        let subtr: SparsePoly<Z64<P>, $x> = subtr.into();
+                        let terms = subtr.into_terms().into_iter()
                             .map(|c| {
-                                let mut powers = [0; N];
-                                powers[0..M].copy_from_slice(&c.powers);
-                                powers[M] = coeff_idx as u32 - c.powers.iter().sum::<u32>();
+                                let mut powers = [0; $x];
+                                powers[0] = c.powers.iter().sum::<u32>();
+                                powers[1..].copy_from_slice(&c.powers[0..$y]);
                                 SparseMono::new(c.coeff, powers)
                             });
-                        let rec_poly = SparsePoly::from_terms(terms.collect());
-                        debug!("Reconstructed numerator contribution {rec_poly}");
-                        if !self.shift.is_zero() {
-                            self.add_shift_subtr_from(wot, rec_poly.clone());
-                        }
+                        let subtr = SparsePoly::from_terms(terms.collect());
+                        let subtr = [<DensePoly $x>]::from(subtr);
+                        trace!("shift subtraction in [t, x1, ...]: {subtr}");
+                        self.subtr.add_subtr(wot, subtr);
+                    }
+
+                    pub(crate) fn into_rec(self) -> [SparsePoly<Z64<P>, $x>; 2] {
+                        [self.num, self.den]
+                    }
+                }
+
+                // Shift subtraction polynomials
+                // Note that the order of variables is [t, x0, x1, ...]
+                // i.e. unlike elsewhere t goes first
+                #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                struct [<ShiftSubtraction $x>]<const P: u64> {
+                    num_subtr: [<DensePoly $x>]<Z64<P>>,
+                    den_subtr: [<DensePoly $x>]<Z64<P>>,
+                }
+
+                impl<const P: u64> [<ShiftSubtraction $x>]<P> {
+                    fn add_subtr(&mut self, wot: NumOrDen, subtr : [<DensePoly $x>]<Z64<P>>) {
                         match wot {
-                            Num => {
-                                self.num += rec_poly;
-                                self.num_coeff_known += 1
+                            NumOrDen::Num => self.num_subtr += subtr,
+                            NumOrDen::Den => self.den_subtr += subtr,
+                        }
+                    }
+
+                    fn eval(
+                        &self,
+                        wot: NumOrDen,
+                        idx: usize,
+                        pt: &[Z64<P>; $y]
+                    ) -> Z64<P> {
+                        match wot {
+                            NumOrDen::Num => if idx >= self.num_subtr.len() {
+                                Z64::zero()
+                            } else {
+                                self.num_subtr.coeff(idx).eval(pt)
                             },
-                            Den => {
-                                self.den += rec_poly;
-                                self.den_coeff_known += 1
-                            },
-                        };
-                        break;
-                    },
+                            NumOrDen::Den => if idx >= self.den_subtr.len() {
+                                Z64::zero()
+                            } else {
+                                self.den_subtr.coeff(idx).eval(pt)
+                            }
+                        }
+                    }
                 }
             }
-        }
-        match wot {
-            NumOrDen::Num => {
-                Some(&self.num)
-            },
-            NumOrDen::Den => {
-                Some(&self.den)
-            },
-        }
-    }
-
-    fn add_shift_subtr_from(
-        &mut self,
-        wot: NumOrDen,
-        poly: SparsePoly<Z64<P>, N>
-    ) {
-        // calculate P(z + s) - P(Z)
-        let collected = DensePoly2::from(poly);
-        let shifted = collected.clone().shift(self.shift);
-        let subtr = shifted - &collected;
-        trace!("shift subtraction in z: {subtr}");
-        // turn it into a polynomial in [t, x0, x1, ...]
-        let subtr: SparsePoly<Z64<P>, N> = subtr.into();
-        let terms = subtr.into_terms().into_iter()
-            .map(|c| {
-                let mut powers = [0; N];
-                powers[0] = c.powers.iter().sum::<u32>();
-                powers[1..].copy_from_slice(&c.powers[0..M]);
-                SparseMono::new(c.coeff, powers)
-            });
-        let subtr = SparsePoly::from_terms(terms.collect());
-        let subtr = DensePoly2::from(subtr);
-        trace!("shift subtraction in [t, x1, ...]: {subtr}");
-        self.subtr.add_subtr(wot, subtr);
-    }
-
-    pub(crate) fn into_rec(self) -> [SparsePoly<Z64<P>, N>; 2] {
-        [self.num, self.den]
-    }
-}
-
-// Shift subtraction polynomials
-// Note that the order of variables is [t, x0, x1, ...]
-// i.e. unlike elsewhere t goes first
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct ShiftSubtraction<const P: u64> {
-    num_subtr: DensePoly2<Z64<P>>,
-    den_subtr: DensePoly2<Z64<P>>,
-}
-
-impl<const P: u64> ShiftSubtraction<P> {
-    fn add_subtr(&mut self, wot: NumOrDen, subtr : DensePoly2<Z64<P>>) {
-        match wot {
-            NumOrDen::Num => self.num_subtr += subtr,
-            NumOrDen::Den => self.den_subtr += subtr,
-        }
-    }
-
-    fn eval(
-        &self,
-        wot: NumOrDen,
-        idx: usize,
-        pt: &[Z64<P>; 1]
-    ) -> Z64<P> {
-        match wot {
-            NumOrDen::Num => if idx >= self.num_subtr.len() {
-                Z64::zero()
-            } else {
-                self.num_subtr.coeff(idx).eval(pt)
-            },
-            NumOrDen::Den => if idx >= self.den_subtr.len() {
-                Z64::zero()
-            } else {
-                self.den_subtr.coeff(idx).eval(pt)
-            }
-        }
-    }
+        )*
+    };
 }
 
 fn add<T: AddAssign, const N: usize>(mut a: [T; N], b: [T; N]) -> [T; N] {
@@ -404,6 +441,10 @@ impl<const P: u64, const N: usize> RatPt<P, N> {
         }
     }
 }
+
+impl_rec_with_ran!(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16);
+impl_rec_with_ran_and_shift!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
+impl_rec_helper!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
 
 #[cfg(test)]
 mod tests {
@@ -573,6 +614,60 @@ mod tests {
         }
     }
 
+    #[test]
+    fn rec_rat3() {
+        log_init();
+
+        const NTESTS: u32 = 40;
+        const MAX_POW: u32 = 2;
+        const MAX_COEFF: u64 = 29;
+        const P: u64 = 1152921504606846883;
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+        let rec = RatRec::new(1);
+
+        for _ in 0..NTESTS {
+            let max_pow = rng.gen_range(0..=MAX_POW);
+            let nterms = 2usize.pow(max_pow);
+            let coeff = repeat_with(
+                || SparseMono::new(
+                    Z64::<P>::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                    [(); 3].map(|_| rng.gen_range(0..=MAX_POW))
+                )
+            ).take(nterms).collect();
+            let mut num = SparsePoly::from_terms(coeff);
+
+            let mut den = if num.is_zero() {
+                One::one()
+            } else {
+                let mut den: SparsePoly<_, 3> = Zero::zero();
+                while den.is_zero() {
+                    let coeff = repeat_with(
+                        || SparseMono::new(
+                            Z64::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                            [(); 3].map(|_| rng.gen_range(0..=MAX_POW))
+                        )
+                    ).take(nterms).collect();
+                    den = SparsePoly::from_terms(coeff);
+                }
+                den
+            };
+
+            // normalise
+            let norm = den.term(0).coeff.inv();
+            num *= norm;
+            den *= norm;
+
+            let rat = Rat::from_num_den_unchecked(num, den);
+            eprintln!("trying to reconstruct {rat}");
+
+            let res = (|z| rat.try_eval(&z))
+                .rec_with_ran(rec, &mut rng)
+                .unwrap();
+            eprintln!("reconstructed {res}");
+            assert!(sample_eq3(&rat, &res, &mut rng));
+        }
+    }
+
     fn sample_eq<const P: u64>(
         orig: &Rat<SparsePoly<Z64<P>, 2>>,
         rec: &Rat<SparsePoly<Z64<P>, 2>>,
@@ -581,6 +676,21 @@ mod tests {
         const TESTS: usize = 10;
         for _ in 0..TESTS {
             let pt: [Z64<P>; 2] = rng.gen();
+            if orig.try_eval(&pt) != rec.try_eval(&pt) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn sample_eq3<const P: u64>(
+        orig: &Rat<SparsePoly<Z64<P>, 3>>,
+        rec: &Rat<SparsePoly<Z64<P>, 3>>,
+        mut rng: impl Rng
+    ) -> bool {
+        const TESTS: usize = 10;
+        for _ in 0..TESTS {
+            let pt: [Z64<P>; 3] = rng.gen();
             if orig.try_eval(&pt) != rec.try_eval(&pt) {
                 return false;
             }
