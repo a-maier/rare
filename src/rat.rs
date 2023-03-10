@@ -4,10 +4,11 @@ use std::{
 };
 
 use galois_fields::Z64;
+use thiserror::Error;
 
 use crate::{
     dense_poly::DensePoly,
-    traits::{One, TryEval, WithVars, Zero},
+    traits::{One, TryEval, WithVars, Zero}, arr::Arr,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -151,5 +152,98 @@ impl<'a, 'b, V: Display, const P: u64> Display
             rat.num().with_vars(var),
             rat.den().with_vars(var)
         )
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Error)]
+pub struct NoneError { }
+
+impl Display for NoneError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "No result found")
+    }
+}
+
+
+pub type Rat64 = Rat<i64, u64>;
+
+impl<const P: u64> TryFrom<Z64<P>> for Rat64 {
+    type Error = NoneError;
+
+    fn try_from(value: Z64<P>) -> Result<Self, Self::Error> {
+        let max_bound = (P / 2) as i64;
+        let max_den = (max_bound as f64).powf(1. / 4.) as i64;
+        wang_reconstruct(value, max_bound / max_den, max_den).ok_or(NoneError{})
+    }
+}
+
+fn wang_reconstruct<const P: u64>(
+    value: Z64<P>,
+    max_num: i64,
+    max_den: i64
+) -> Option<Rat64> {
+
+    let mut v = Arr([P as i64, 0]);
+    let mut w = Arr([i64::from(value), 1]);
+    while w[0] > max_num {
+        let q = v[0] / w[0];
+        let z = v - w * q;
+        (v, w) = (w, z);
+    }
+    if w[1] < 0 {
+        w = -w;
+    }
+    if w[1] < max_den && gcd(w[0], w[1]) == 1 {
+        Some(Rat64::from_num_den_unchecked(w[0], w[1] as u64))
+    } else {
+        None
+    }
+}
+
+fn gcd(mut a: i64, mut b: i64) -> i64 {
+    while b != 0 {
+        (a, b) = (b, a.rem_euclid(b))
+    }
+    a
+}
+
+#[cfg(test)]
+mod tests {
+    use log::debug;
+    use rand::Rng;
+    use rand_xoshiro::rand_core::SeedableRng;
+
+    use super::*;
+
+    fn log_init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn rec_rat_num64() {
+        log_init();
+
+        const NTESTS: u32 = 10000;
+        const P: u64 = 1152921504606846883;
+
+        let max_num = 1000;
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+
+        for _ in 0..NTESTS {
+            let mut num = rng.gen_range(-max_num..=max_num);
+            let mut den = rng.gen_range(1..=max_num);
+            let gcd = gcd(num, den);
+            num /= gcd;
+            den /= gcd;
+            if num == 0 {
+                den = 1;
+            }
+            let n: Z64<P> = Z64::new(num) / Z64::new(den);
+            let rec = Rat64::try_from(n).unwrap();
+            debug!("{num}/{den} == {rec}");
+            assert_eq!(rec.num(), &num);
+            assert_eq!(*rec.den(), den as u64);
+        }
     }
 }
