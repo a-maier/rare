@@ -8,3 +8,4 @@ pub mod rec_rat;
 pub mod rec_thiele;
 pub mod sparse_poly;
 pub mod traits;
+mod arr;
