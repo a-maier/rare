@@ -24,6 +24,10 @@ impl<T, const Z: usize> SparsePoly<T, Z> {
         self.terms.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.terms.is_empty()
+    }
+
     pub fn into_terms(self) -> Vec<SparseMono<T, Z>> {
         self.terms
     }
@@ -126,6 +130,7 @@ where
     SparsePoly<T, Z>: AddAssign,
     for<'a> &'a T: Neg<Output = T>
 {
+    #[allow(clippy::suspicious_op_assign_impl)]
     fn sub_assign(&mut self, mut rhs: SparsePoly<T, Z>) {
         for term in &mut rhs.terms {
             term.coeff = term.coeff.neg();

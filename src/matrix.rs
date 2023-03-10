@@ -15,8 +15,8 @@ pub(crate) struct Matrix<T> {
 
 impl<T> Matrix<T> {
     pub(crate) fn from_vec(nrows: usize, elem: Vec<T>) -> Self {
-        assert!(elem.len() == 0 || elem.len() % nrows == 0);
-        let ncols = if elem.len() == 0 {
+        assert!(elem.is_empty() || elem.len() % nrows == 0);
+        let ncols = if elem.is_empty() {
             0
         } else {
             elem.len() / nrows
@@ -53,8 +53,8 @@ impl<T> Matrix<T> {
         let elems = &mut self.elem[i * row_length..];
         let (first_row, rest) = elems.split_at_mut(row_length);
         let second_row_idx = (j - i - 1) * row_length;
-        let mut second_row = &mut rest[second_row_idx..(second_row_idx + row_length)];
-        first_row.swap_with_slice(&mut second_row)
+        let second_row = &mut rest[second_row_idx..(second_row_idx + row_length)];
+        first_row.swap_with_slice(second_row)
     }
 }
 

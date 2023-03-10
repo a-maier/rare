@@ -32,6 +32,10 @@ impl<T> DensePoly<T> {
         self.coeff.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.coeff.is_empty()
+    }
+
     pub fn coeffs(&self) -> &[T] {
         &self.coeff
     }
@@ -501,9 +505,7 @@ impl<const P: u64> Shift<Z64<P>> for DensePoly<Z64<P>> {
         if shift.is_zero() {
             return self;
         }
-        let mut res_coeff = Vec::from_iter(
-            repeat_with(|| Z64::zero()).take(self.len())
-        );
+        let mut res_coeff = vec![Z64::zero(); self.len()];
         for (pow, coeff) in self.coeff.into_iter().enumerate().rev() {
             if coeff.is_zero() {
                 continue;
