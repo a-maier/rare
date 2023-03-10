@@ -4,7 +4,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use galois_fields::Z64;
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
-use rare::{dense_poly::{DensePoly, DensePoly2}, traits::{Eval, Rec, Zero, One, TryEval}, rec_newton::{NewtonRec, NewtonPoly, NewtonPoly2}, rat::Rat, rec_rat::RatRec, rec_thiele::{ThieleRat, ThieleRec}, rec_linear::LinearRec, sparse_poly::{SparsePoly, SparseMono}};
+use rare::{dense_poly::{DensePoly, DensePoly2}, traits::{Eval, Rec, Zero, One, TryEval}, rec_newton::{NewtonRec, NewtonPoly, NewtonPoly2}, rat::Rat, rec_rat::RatRec, rec_thiele::{ThieleRat, ThieleRec}, rec_linear::LinearRec, sparse_poly::SparsePoly};
 
 fn gen_poly1<const P: u64>(n: u32, mut rng: impl Rng) -> DensePoly<Z64<P>> {
     let max_pow = rng.gen_range(0..=n);
