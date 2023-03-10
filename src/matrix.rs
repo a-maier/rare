@@ -4,13 +4,16 @@
 //       - nalgebra uses column-major storage
 //       - grid can't do it
 
-use std::{ops::{Index, IndexMut}, fmt::{Display, self}};
+use std::{
+    fmt::{self, Display},
+    ops::{Index, IndexMut},
+};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(crate) struct Matrix<T> {
     nrows: usize,
     ncols: usize,
-    elem: Vec<T>
+    elem: Vec<T>,
 }
 
 impl<T> Matrix<T> {
@@ -21,11 +24,7 @@ impl<T> Matrix<T> {
         } else {
             elem.len() / nrows
         };
-        Self {
-            nrows,
-            ncols,
-            elem
-        }
+        Self { nrows, ncols, elem }
     }
 
     pub(crate) fn nrows(&self) -> usize {
@@ -53,7 +52,8 @@ impl<T> Matrix<T> {
         let elems = &mut self.elem[i * row_length..];
         let (first_row, rest) = elems.split_at_mut(row_length);
         let second_row_idx = (j - i - 1) * row_length;
-        let second_row = &mut rest[second_row_idx..(second_row_idx + row_length)];
+        let second_row =
+            &mut rest[second_row_idx..(second_row_idx + row_length)];
         first_row.swap_with_slice(second_row)
     }
 }
@@ -81,20 +81,20 @@ impl<T: Display> Display for Matrix<T> {
         match self.nrows() {
             0 => writeln!(f, "[]"),
             1 => {
-                write!(f, "[" )?;
+                write!(f, "[")?;
                 for e in &self.elem {
-                    write!(f, " {e}" )?;
+                    write!(f, " {e}")?;
                 }
-                writeln!(f, " ]" )
-            },
+                writeln!(f, " ]")
+            }
             _ => {
                 for row in 0..self.nrows() {
-                    write!(f, "|" )?;
+                    write!(f, "|")?;
                     let start_idx = row * self.ncols;
                     for e in &self.elem[start_idx..(start_idx + self.ncols())] {
-                        write!(f, " {e}" )?;
+                        write!(f, " {e}")?;
                     }
-                    writeln!(f, " |" )?;
+                    writeln!(f, " |")?;
                 }
                 Ok(())
             }

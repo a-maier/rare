@@ -1,16 +1,26 @@
-use std::{ops::{AddAssign, ControlFlow}, num::NonZeroUsize};
+use std::{
+    num::NonZeroUsize,
+    ops::{AddAssign, ControlFlow},
+};
 
 use galois_fields::Z64;
 use log::{debug, trace};
-use rand::Rng;
 use paste::paste;
+use rand::Rng;
 
-use crate::{sparse_poly::{SparsePoly, SparseMono}, traits::{Eval, Rec, WithVars, Zero, One, Shift}, rat::Rat, rec_thiele::ThieleRec, dense_poly::{DensePoly, DensePoly1}, rec_linear::LinearRec};
+use crate::{
+    dense_poly::{DensePoly, DensePoly1},
+    rat::Rat,
+    rec_linear::LinearRec,
+    rec_thiele::ThieleRec,
+    sparse_poly::{SparseMono, SparsePoly},
+    traits::{Eval, One, Rec, Shift, WithVars, Zero},
+};
 
 /// Rational function reconstruction
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct RatRec {
-    extra_pts: usize
+    extra_pts: usize,
 }
 
 trait RecWithRanAndShift<const N: usize> {
@@ -20,7 +30,8 @@ trait RecWithRanAndShift<const N: usize> {
         rng: impl Rng,
         shift: [Z64<P>; N],
     ) -> Option<Rat<SparsePoly<Z64<P>, N>>>
-    where F: FnMut([Z64<P>; N]) -> Option<Z64<P>>;
+    where
+        F: FnMut([Z64<P>; N]) -> Option<Z64<P>>;
 }
 
 impl RatRec {
@@ -28,7 +39,6 @@ impl RatRec {
         Self { extra_pts }
     }
 }
-
 
 macro_rules! impl_rec_with_ran_and_shift {
     ( $($x:literal, $y:literal), * ) => {
@@ -89,7 +99,7 @@ macro_rules! impl_rec_with_ran_and_shift {
 // with a `shift` = [s0, s1, s2, ..., sM]
 fn x_to_z<const N: usize, const P: u64>(
     mut coord: [Z64<P>; N],
-    shift: &[Z64<P>; N]
+    shift: &[Z64<P>; N],
 ) -> [Z64<P>; N] {
     let (t, xs) = coord.split_last_mut().unwrap();
     for x in xs {
@@ -107,12 +117,13 @@ fn x_to_z<const N: usize, const P: u64>(
 // returns an iterator over tuples (t, z)
 fn transformed_coord_iter<const N: usize, const P: u64>(
     mut xcoord: [Z64<P>; N],
-    shift: [Z64<P>; N]
+    shift: [Z64<P>; N],
 ) -> impl Iterator<Item = (Z64<P>, [Z64<P>; N])> {
     std::iter::repeat_with(move || {
         xcoord[N - 1] += Z64::one();
         (xcoord[N - 1], x_to_z(xcoord, &shift))
-    }).take(P as usize)
+    })
+    .take(P as usize)
 }
 
 // find a shift such that the shifted function fs(z) = f(z + s)
@@ -122,7 +133,8 @@ fn find_shift<F, const P: u64, const N: usize>(
     mut f: F,
     mut rng: impl Rng,
 ) -> [Z64<P>; N]
-where F: FnMut([Z64<P>; N]) -> Option<Z64<P>>
+where
+    F: FnMut([Z64<P>; N]) -> Option<Z64<P>>,
 {
     let mut shift = [Z64::zero(); N];
     for i in (0..N).cycle() {
@@ -162,7 +174,7 @@ macro_rules! impl_rec_with_ran {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 enum NumOrDen {
     Num,
-    Den
+    Den,
 }
 
 macro_rules! impl_rec_helper {
@@ -422,9 +434,15 @@ impl<const P: u64, const N: usize> RatPt<P, N> {
     }
 }
 
-impl_rec_with_ran!(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16);
-impl_rec_with_ran_and_shift!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
-impl_rec_helper!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
+impl_rec_with_ran!(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+impl_rec_with_ran_and_shift!(
+    16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6,
+    5, 5, 4, 4, 3, 3, 2, 2, 1
+);
+impl_rec_helper!(
+    16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6,
+    5, 5, 4, 4, 3, 3, 2, 2, 1
+);
 
 #[cfg(test)]
 mod tests {
@@ -433,7 +451,10 @@ mod tests {
     use rand::Rng;
     use rand_xoshiro::rand_core::SeedableRng;
 
-    use crate::{traits::{TryEval, One, Zero}, sparse_poly::SparseMono};
+    use crate::{
+        sparse_poly::SparseMono,
+        traits::{One, TryEval, Zero},
+    };
 
     use super::*;
 
@@ -455,12 +476,14 @@ mod tests {
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
-            let coeff = repeat_with(
-                || SparseMono::new(
+            let coeff = repeat_with(|| {
+                SparseMono::new(
                     Z64::<P>::new_unchecked(rng.gen_range(0..MAX_COEFF)),
-                    [(); 2].map(|_| rng.gen_range(0..=MAX_POW))
+                    [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
-            ).take(nterms).collect();
+            })
+            .take(nterms)
+            .collect();
             let num = SparsePoly::from_terms(coeff);
 
             let den = if num.is_zero() {
@@ -468,12 +491,14 @@ mod tests {
             } else {
                 let mut den: SparsePoly<_, 2> = Zero::zero();
                 while den.is_zero() {
-                    let coeff = repeat_with(
-                        || SparseMono::new(
+                    let coeff = repeat_with(|| {
+                        SparseMono::new(
                             Z64::new_unchecked(rng.gen_range(0..MAX_COEFF)),
-                            [(); 2].map(|_| rng.gen_range(0..=MAX_POW))
+                            [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
-                    ).take(nterms).collect();
+                    })
+                    .take(nterms)
+                    .collect();
                     den = SparsePoly::from_terms(coeff);
                 }
                 // ensure we don't need a shift
@@ -486,9 +511,8 @@ mod tests {
             let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
 
-            let res = (|z| rat.try_eval(&z))
-                .rec_with_ran(rec, &mut rng)
-                .unwrap();
+            let res =
+                (|z| rat.try_eval(&z)).rec_with_ran(rec, &mut rng).unwrap();
             eprintln!("reconstructed {res}");
             assert_eq!(rat, res);
         }
@@ -554,12 +578,14 @@ mod tests {
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
-            let coeff = repeat_with(
-                || SparseMono::new(
+            let coeff = repeat_with(|| {
+                SparseMono::new(
                     Z64::<P>::new_unchecked(rng.gen_range(0..MAX_COEFF)),
-                    [(); 2].map(|_| rng.gen_range(0..=MAX_POW))
+                    [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
-            ).take(nterms).collect();
+            })
+            .take(nterms)
+            .collect();
             let mut num = SparsePoly::from_terms(coeff);
 
             let mut den = if num.is_zero() {
@@ -567,12 +593,14 @@ mod tests {
             } else {
                 let mut den: SparsePoly<_, 2> = Zero::zero();
                 while den.is_zero() {
-                    let coeff = repeat_with(
-                        || SparseMono::new(
+                    let coeff = repeat_with(|| {
+                        SparseMono::new(
                             Z64::new_unchecked(rng.gen_range(0..MAX_COEFF)),
-                            [(); 2].map(|_| rng.gen_range(0..=MAX_POW))
+                            [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
-                    ).take(nterms).collect();
+                    })
+                    .take(nterms)
+                    .collect();
                     den = SparsePoly::from_terms(coeff);
                 }
                 den
@@ -586,9 +614,8 @@ mod tests {
             let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
 
-            let res = (|z| rat.try_eval(&z))
-                .rec_with_ran(rec, &mut rng)
-                .unwrap();
+            let res =
+                (|z| rat.try_eval(&z)).rec_with_ran(rec, &mut rng).unwrap();
             eprintln!("reconstructed {res}");
             assert!(sample_eq(&rat, &res, &mut rng));
         }
@@ -608,12 +635,14 @@ mod tests {
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
-            let coeff = repeat_with(
-                || SparseMono::new(
+            let coeff = repeat_with(|| {
+                SparseMono::new(
                     Z64::<P>::new_unchecked(rng.gen_range(0..MAX_COEFF)),
-                    [(); 3].map(|_| rng.gen_range(0..=MAX_POW))
+                    [(); 3].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
-            ).take(nterms).collect();
+            })
+            .take(nterms)
+            .collect();
             let mut num = SparsePoly::from_terms(coeff);
 
             let mut den = if num.is_zero() {
@@ -621,12 +650,14 @@ mod tests {
             } else {
                 let mut den: SparsePoly<_, 3> = Zero::zero();
                 while den.is_zero() {
-                    let coeff = repeat_with(
-                        || SparseMono::new(
+                    let coeff = repeat_with(|| {
+                        SparseMono::new(
                             Z64::new_unchecked(rng.gen_range(0..MAX_COEFF)),
-                            [(); 3].map(|_| rng.gen_range(0..=MAX_POW))
+                            [(); 3].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
-                    ).take(nterms).collect();
+                    })
+                    .take(nterms)
+                    .collect();
                     den = SparsePoly::from_terms(coeff);
                 }
                 den
@@ -640,9 +671,8 @@ mod tests {
             let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
 
-            let res = (|z| rat.try_eval(&z))
-                .rec_with_ran(rec, &mut rng)
-                .unwrap();
+            let res =
+                (|z| rat.try_eval(&z)).rec_with_ran(rec, &mut rng).unwrap();
             eprintln!("reconstructed {res}");
             assert!(sample_eq3(&rat, &res, &mut rng));
         }
@@ -651,7 +681,7 @@ mod tests {
     fn sample_eq<const P: u64>(
         orig: &Rat<SparsePoly<Z64<P>, 2>>,
         rec: &Rat<SparsePoly<Z64<P>, 2>>,
-        mut rng: impl Rng
+        mut rng: impl Rng,
     ) -> bool {
         const TESTS: usize = 10;
         for _ in 0..TESTS {
@@ -666,7 +696,7 @@ mod tests {
     fn sample_eq3<const P: u64>(
         orig: &Rat<SparsePoly<Z64<P>, 3>>,
         rec: &Rat<SparsePoly<Z64<P>, 3>>,
-        mut rng: impl Rng
+        mut rng: impl Rng,
     ) -> bool {
         const TESTS: usize = 10;
         for _ in 0..TESTS {
@@ -677,5 +707,4 @@ mod tests {
         }
         true
     }
-
 }

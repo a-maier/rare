@@ -1,15 +1,20 @@
-use std::fmt::{Display, self};
+use std::fmt::{self, Display};
 
+use galois_fields::{TryDiv, Z64};
 use log::{debug, trace};
-use galois_fields::{Z64, TryDiv};
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
-use crate::{traits::{Zero, One, WithVars, Rec, TryEval}, rat::Rat, dense_poly::DensePoly, rand::pt_iter};
+use crate::{
+    dense_poly::DensePoly,
+    rand::pt_iter,
+    rat::Rat,
+    traits::{One, Rec, TryEval, WithVars, Zero},
+};
 
 /// Univariate rational function reconstruction using Thiele interpolation
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ThieleRec {
-    extra_pts: usize
+    extra_pts: usize,
 }
 
 impl Default for ThieleRec {
@@ -22,7 +27,7 @@ fn a_next<const P: u64>(
     rat: &ThieleRat<Z64<P>>,
     y_last: Z64<P>,
     y: Z64<P>,
-    f_y: Z64<P>
+    f_y: Z64<P>,
 ) -> Option<Z64<P>> {
     let mut a = f_y;
     // TODO: check if calculating `a` with less divisions is faster
@@ -39,11 +44,11 @@ impl ThieleRec {
 
     pub fn rec_from_seq<I, const P: u64>(
         &self,
-        pts: I
+        pts: I,
     ) -> Option<ThieleRat<Z64<P>>>
-    where I: IntoIterator<Item = (Z64<P>, Z64<P>)>
+    where
+        I: IntoIterator<Item = (Z64<P>, Z64<P>)>,
     {
-
         debug!("1d rational function reconstruction");
         let mut pts = pts.into_iter();
         let Some((y0, a0)) = pts.next() else {
@@ -79,7 +84,8 @@ impl ThieleRec {
         poly: F,
         rng: impl Rng,
     ) -> Option<ThieleRat<Z64<P>>>
-    where F: FnMut(Z64<P>) -> Option<Z64<P>>
+    where
+        F: FnMut(Z64<P>) -> Option<Z64<P>>,
     {
         self.rec1_with_ran(poly, rng)
     }
@@ -89,22 +95,23 @@ impl ThieleRec {
         mut poly: F,
         rng: impl Rng,
     ) -> Option<ThieleRat<Z64<P>>>
-    where F: FnMut(Z64<P>) -> Option<Z64<P>>
+    where
+        F: FnMut(Z64<P>) -> Option<Z64<P>>,
     {
         self.rec_from_seq(
-            pt_iter(rng).filter_map(|pt| poly(pt).map(|fy| (pt, fy)))
+            pt_iter(rng).filter_map(|pt| poly(pt).map(|fy| (pt, fy))),
         )
     }
 
     pub fn rec_univariate<F, const P: u64>(
         &self,
-        poly: F
+        poly: F,
     ) -> Option<ThieleRat<Z64<P>>>
-    where F: FnMut(Z64<P>) -> Option<Z64<P>>
+    where
+        F: FnMut(Z64<P>) -> Option<Z64<P>>,
     {
         self.rec_univariate_with_ran(poly, thread_rng())
     }
-
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -127,7 +134,7 @@ impl<const P: u64> TryEval<Z64<P>> for ThieleRat<Z64<P>> {
 
 impl<T: Zero, U> Zero for ThieleRat<T, U> {
     fn zero() -> Self {
-        Self{
+        Self {
             a_last: Zero::zero(),
             coeffs: Vec::new(),
         }
@@ -149,9 +156,12 @@ impl<const P: u64> From<&ThieleRat<Z64<P>>> for Rat<DensePoly<Z64<P>>> {
             let xmy = DensePoly::from_coeff_unchecked(vec![-*y, One::one()]);
             (res_num, res_den) = (&res_num * a + xmy * res_den, res_num);
         }
-        let norm = res_den.coeffs().iter()
+        let norm = res_den
+            .coeffs()
+            .iter()
             .find(|c| !c.is_zero())
-            .unwrap().inv();
+            .unwrap()
+            .inv();
         res_num *= &norm;
         res_den *= &norm;
         Rat::from_num_den_unchecked(res_num, res_den)
@@ -171,7 +181,7 @@ where
 {
     type Output = FmtThieleRat<'a, 'b, T, U, S>;
 
-    fn with_vars(&'a self, vars: &'b[S; 1]) -> Self::Output {
+    fn with_vars(&'a self, vars: &'b [S; 1]) -> Self::Output {
         FmtThieleRat::new(self, vars)
     }
 }
@@ -186,24 +196,34 @@ impl<const P: u64> From<Z64<P>> for ThieleRat<Z64<P>> {
     fn from(source: Z64<P>) -> Self {
         Self {
             a_last: source,
-            coeffs: Vec::new()
+            coeffs: Vec::new(),
         }
     }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct FmtThieleRat<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display> {
+pub struct FmtThieleRat<
+    'a,
+    'b,
+    T: Display + One + Zero,
+    U: Display + One + Zero,
+    V: Display,
+> {
     rat: &'a ThieleRat<T, U>,
     var: &'b [V],
 }
 
-impl<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display> FmtThieleRat<'a, 'b, T, U, V> {
+impl<'a, 'b, T: Display + One + Zero, U: Display + One + Zero, V: Display>
+    FmtThieleRat<'a, 'b, T, U, V>
+{
     fn new(rat: &'a ThieleRat<T, U>, var: &'b [V]) -> Self {
         Self { rat, var }
     }
 }
 
-impl<'a, 'b, V: Display, const P: u64> Display for FmtThieleRat<'a, 'b, Z64<P>, Z64<P>, V> {
+impl<'a, 'b, V: Display, const P: u64> Display
+    for FmtThieleRat<'a, 'b, Z64<P>, Z64<P>, V>
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let var = &self.var[0];
         for (a, y) in &self.rat.coeffs {
@@ -218,30 +238,32 @@ impl<'a, 'b, V: Display, const P: u64> Display for FmtThieleRat<'a, 'b, Z64<P>, 
 }
 
 impl<F, const P: u64> Rec<ThieleRec, Z64<P>> for F
-where F: FnMut(Z64<P>) -> Option<Z64<P>> {
+where
+    F: FnMut(Z64<P>) -> Option<Z64<P>>,
+{
     type Output = Option<ThieleRat<Z64<P>>>;
 
     fn rec_with_ran(
         &mut self,
         reconstructor: ThieleRec,
-        rng: impl ::rand::Rng
+        rng: impl ::rand::Rng,
     ) -> Self::Output {
         reconstructor.rec_from_seq(
-            pt_iter(rng).filter_map(
-                |pt| (self)(pt).map(|fy| (pt, fy))
-            )
+            pt_iter(rng).filter_map(|pt| (self)(pt).map(|fy| (pt, fy))),
         )
     }
 }
 
 impl<F, const P: u64> Rec<ThieleRec, [Z64<P>; 1]> for F
-where F: FnMut([Z64<P>; 1]) -> Option<Z64<P>> {
+where
+    F: FnMut([Z64<P>; 1]) -> Option<Z64<P>>,
+{
     type Output = Option<ThieleRat<Z64<P>>>;
 
     fn rec_with_ran(
         &mut self,
         reconstructor: ThieleRec,
-        rng: impl ::rand::Rng
+        rng: impl ::rand::Rng,
     ) -> Self::Output {
         (|pt| (self)([pt])).rec_with_ran(reconstructor, rng)
     }
@@ -276,7 +298,8 @@ mod tests {
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
-            let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
+            let coeff =
+                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
             let num = DensePoly::from_coeff(coeff);
 
             let den = if num.is_zero() {
@@ -285,7 +308,7 @@ mod tests {
                 let max_pow = rng.gen_range(0..=MAX_POW);
                 let nterms = 2usize.pow(max_pow);
                 let mut coeff = Vec::from_iter(
-                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms)
+                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms),
                 );
                 coeff[0] = One::one();
                 DensePoly::from_coeff(coeff)
@@ -293,8 +316,7 @@ mod tests {
 
             let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
-            let reconstructed =
-                (|x: Z64<P>| rat.try_eval(&x))
+            let reconstructed = (|x: Z64<P>| rat.try_eval(&x))
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
             eprintln!("{reconstructed}");
@@ -318,7 +340,8 @@ mod tests {
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
-            let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
+            let coeff =
+                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
             let num = DensePoly::from_coeff(coeff);
 
             let den = if num.is_zero() {
@@ -327,15 +350,14 @@ mod tests {
                 let max_pow = rng.gen_range(0..=MAX_POW);
                 let nterms = 2usize.pow(max_pow);
                 let mut coeff = Vec::from_iter(
-                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms)
+                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms),
                 );
                 coeff[0] = One::one();
                 DensePoly::from_coeff(coeff)
             };
 
             let rat = Rat::from_num_den_unchecked(num, den);
-            let reconstructed =
-                (|x: Z64<P>| rat.try_eval(&x))
+            let reconstructed = (|x: Z64<P>| rat.try_eval(&x))
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
             let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();

@@ -1,19 +1,28 @@
-use std::{ops::{Add, Neg, Sub, MulAssign, DivAssign, Mul, Div, AddAssign, SubAssign}, fmt::{Display, self}, cmp::Ordering};
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display},
+    ops::{
+        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign,
+    },
+};
 
 use galois_fields::Z64;
 use num_traits::Pow;
 use paste::paste;
 
-use crate::{traits::{Zero, One, WithVars, Eval, TryEval}, dense_poly::{ALL_VARS, DensePoly}};
+use crate::{
+    dense_poly::{DensePoly, ALL_VARS},
+    traits::{Eval, One, TryEval, WithVars, Zero},
+};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SparsePoly<T, const Z: usize> {
-    terms: Vec<SparseMono<T, Z>>
+    terms: Vec<SparseMono<T, Z>>,
 }
 
 impl<T, const Z: usize> SparsePoly<T, Z> {
     pub fn new() -> Self {
-        Self{ terms: Vec::new() }
+        Self { terms: Vec::new() }
     }
 
     pub fn terms(&self) -> &[SparseMono<T, Z>] {
@@ -39,7 +48,7 @@ impl<T, const Z: usize> SparsePoly<T, Z> {
 
 impl<T: Zero, const Z: usize> SparsePoly<T, Z> {
     pub fn from_raw_terms(terms: Vec<SparseMono<T, Z>>) -> Self {
-        debug_assert!(! terms.iter().any(|c| c.is_zero()));
+        debug_assert!(!terms.iter().any(|c| c.is_zero()));
         Self { terms }
     }
 }
@@ -80,7 +89,8 @@ impl<T: Zero, const Z: usize> From<SparseMono<T, Z>> for SparsePoly<T, Z> {
 }
 
 impl<T, const Z: usize> AddAssign for SparsePoly<T, Z>
-where SparsePoly<T, Z>: Add<Output = Self>
+where
+    SparsePoly<T, Z>: Add<Output = Self>,
 {
     fn add_assign(&mut self, rhs: SparsePoly<T, Z>) {
         *self = std::mem::replace(self, Self::new()) + rhs;
@@ -102,23 +112,21 @@ where
                 (None, _) => {
                     res.extend(rhs_terms);
                     break;
-                },
+                }
                 (_, None) => {
                     res.extend(lhs_terms);
                     break;
-                },
-                (Some(lhs), Some(rhs)) => {
-                    match lhs.powers.cmp(&rhs.powers) {
-                        Ordering::Less => res.push(lhs_terms.next().unwrap()),
-                        Ordering::Greater => res.push(rhs_terms.next().unwrap()),
-                        Ordering::Equal => {
-                            let mut lhs = lhs_terms.next().unwrap();
-                            let rhs = rhs_terms.next().unwrap();
-                            lhs.coeff += rhs.coeff;
-                            res.push(lhs)
-                        }
-                    }
                 }
+                (Some(lhs), Some(rhs)) => match lhs.powers.cmp(&rhs.powers) {
+                    Ordering::Less => res.push(lhs_terms.next().unwrap()),
+                    Ordering::Greater => res.push(rhs_terms.next().unwrap()),
+                    Ordering::Equal => {
+                        let mut lhs = lhs_terms.next().unwrap();
+                        let rhs = rhs_terms.next().unwrap();
+                        lhs.coeff += rhs.coeff;
+                        res.push(lhs)
+                    }
+                },
             }
         }
         Self::from_raw_terms(res)
@@ -128,7 +136,7 @@ where
 impl<T, const Z: usize> SubAssign for SparsePoly<T, Z>
 where
     SparsePoly<T, Z>: AddAssign,
-    for<'a> &'a T: Neg<Output = T>
+    for<'a> &'a T: Neg<Output = T>,
 {
     #[allow(clippy::suspicious_op_assign_impl)]
     fn sub_assign(&mut self, mut rhs: SparsePoly<T, Z>) {
@@ -140,7 +148,8 @@ where
 }
 
 impl<T, const Z: usize> Sub for SparsePoly<T, Z>
-where SparsePoly<T, Z>: SubAssign
+where
+    SparsePoly<T, Z>: SubAssign,
 {
     type Output = Self;
 
@@ -150,10 +159,11 @@ where SparsePoly<T, Z>: SubAssign
     }
 }
 
-impl<'a, 'b, T, const Z: usize> Mul<&'b SparsePoly<T, Z>> for &'a SparsePoly<T, Z>
+impl<'a, 'b, T, const Z: usize> Mul<&'b SparsePoly<T, Z>>
+    for &'a SparsePoly<T, Z>
 where
     T: Zero + AddAssign,
-&'a T: Mul<&'b T, Output = T>
+    &'a T: Mul<&'b T, Output = T>,
 {
     type Output = SparsePoly<T, Z>;
 
@@ -169,7 +179,8 @@ where
 }
 
 impl<T, const Z: usize> MulAssign<T> for SparsePoly<T, Z>
-where T: Copy + MulAssign + Zero
+where
+    T: Copy + MulAssign + Zero,
 {
     fn mul_assign(&mut self, rhs: T) {
         if rhs.is_zero() {
@@ -184,7 +195,8 @@ where T: Copy + MulAssign + Zero
 }
 
 impl<'a, T, const Z: usize> MulAssign<&'a T> for SparsePoly<T, Z>
-where T: MulAssign<&'a T> + Zero
+where
+    T: MulAssign<&'a T> + Zero,
 {
     fn mul_assign(&mut self, rhs: &'a T) {
         if rhs.is_zero() {
@@ -201,7 +213,7 @@ where T: MulAssign<&'a T> + Zero
 impl<T, const Z: usize> Mul<T> for SparsePoly<T, Z>
 where
     T: Copy + Mul<T> + Zero,
-    <T as Mul<T>>::Output: Zero
+    <T as Mul<T>>::Output: Zero,
 {
     type Output = SparsePoly<<T as Mul<T>>::Output, Z>;
 
@@ -210,10 +222,7 @@ where
             Zero::zero()
         } else {
             Self::Output::from_raw_terms(
-                self.into_terms()
-                    .into_iter()
-                    .map(|t| t * rhs)
-                    .collect()
+                self.into_terms().into_iter().map(|t| t * rhs).collect(),
             )
         }
     }
@@ -222,7 +231,7 @@ where
 impl<'a, T, const Z: usize> Mul<&'a T> for SparsePoly<T, Z>
 where
     T: Mul<&'a T> + Zero,
-    <T as Mul<&'a T>>::Output: Zero
+    <T as Mul<&'a T>>::Output: Zero,
 {
     type Output = SparsePoly<<T as Mul<&'a T>>::Output, Z>;
 
@@ -231,17 +240,15 @@ where
             Zero::zero()
         } else {
             Self::Output::from_raw_terms(
-                self.into_terms()
-                    .into_iter()
-                    .map(|t| t * rhs)
-                    .collect()
+                self.into_terms().into_iter().map(|t| t * rhs).collect(),
             )
         }
     }
 }
 
 impl<T, const Z: usize> DivAssign<T> for SparsePoly<T, Z>
-where T: Copy + DivAssign + Zero
+where
+    T: Copy + DivAssign + Zero,
 {
     fn div_assign(&mut self, rhs: T) {
         for term in &mut self.terms {
@@ -252,7 +259,8 @@ where T: Copy + DivAssign + Zero
 }
 
 impl<'a, T, const Z: usize> DivAssign<&'a T> for SparsePoly<T, Z>
-where T: DivAssign<&'a T> + Zero
+where
+    T: DivAssign<&'a T> + Zero,
 {
     fn div_assign(&mut self, rhs: &'a T) {
         for term in &mut self.terms {
@@ -265,16 +273,13 @@ where T: DivAssign<&'a T> + Zero
 impl<T, const Z: usize> Div<T> for SparsePoly<T, Z>
 where
     T: Copy + Div<T>,
-    <T as Div<T>>::Output: Zero
+    <T as Div<T>>::Output: Zero,
 {
     type Output = SparsePoly<<T as Div<T>>::Output, Z>;
 
     fn div(self, rhs: T) -> Self::Output {
         Self::Output::from_raw_terms(
-            self.into_terms()
-                .into_iter()
-                .map(|t| t / rhs)
-                .collect()
+            self.into_terms().into_iter().map(|t| t / rhs).collect(),
         )
     }
 }
@@ -282,16 +287,13 @@ where
 impl<'a, T, const Z: usize> Div<&'a T> for SparsePoly<T, Z>
 where
     T: Div<&'a T>,
-    <T as Div<&'a T>>::Output: Zero
+    <T as Div<&'a T>>::Output: Zero,
 {
     type Output = SparsePoly<<T as Div<&'a T>>::Output, Z>;
 
     fn div(self, rhs: &'a T) -> Self::Output {
         Self::Output::from_raw_terms(
-            self.into_terms()
-                .into_iter()
-                .map(|t| t / rhs)
-                .collect()
+            self.into_terms().into_iter().map(|t| t / rhs).collect(),
         )
     }
 }
@@ -320,19 +322,21 @@ impl<T: Zero + One, const Z: usize> One for SparsePoly<T, Z> {
     }
 }
 
-impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> {
+impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
+    for SparsePoly<Z64<P>, Z>
+{
     type Output = Z64<P>;
 
     fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
         Some(
-            self.terms().iter().fold(
-                Zero::zero(),
-                |acc, t| acc + t.eval(x)
-            ))
+            self.terms()
+                .iter()
+                .fold(Zero::zero(), |acc, t| acc + t.eval(x)),
+        )
     }
 }
 
-impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> { }
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> {}
 
 impl<T: Zero> From<DensePoly<T>> for SparsePoly<T, 1> {
     fn from(source: DensePoly<T>) -> Self {
@@ -340,10 +344,12 @@ impl<T: Zero> From<DensePoly<T>> for SparsePoly<T, 1> {
             .into_coeff()
             .into_iter()
             .enumerate()
-            .filter_map(|(n, c)| if c.is_zero() {
-                None
-            } else {
-                Some(SparseMono::new(c, [n as u32]))
+            .filter_map(|(n, c)| {
+                if c.is_zero() {
+                    None
+                } else {
+                    Some(SparseMono::new(c, [n as u32]))
+                }
             })
             .collect();
         Self { terms }
@@ -389,22 +395,29 @@ macro_rules! impl_poly_conv_rec {
     };
 }
 
-impl_poly_conv_rec!(16,15,15,14,14,13,13,12,12,11,11,10,10,9,9,8,8,7,7,6,6,5,5,4,4,3,3,2,2,1);
+impl_poly_conv_rec!(
+    16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6,
+    5, 5, 4, 4, 3, 3, 2, 2, 1
+);
 
 pub struct FmtSparsePoly<'a, 'b, V, const P: u64, const Z: usize> {
     p: &'a SparsePoly<Z64<P>, Z>,
     vars: &'b [V; Z],
 }
 
-impl<'a, 'b, V: Display + 'b, const P: u64, const Z: usize> WithVars<'a, &'b [V; Z]> for SparsePoly<Z64<P>, Z> {
+impl<'a, 'b, V: Display + 'b, const P: u64, const Z: usize>
+    WithVars<'a, &'b [V; Z]> for SparsePoly<Z64<P>, Z>
+{
     type Output = FmtSparsePoly<'a, 'b, V, P, Z>;
 
     fn with_vars(&'a self, vars: &'b [V; Z]) -> Self::Output {
-        FmtSparsePoly{ p: self, vars }
+        FmtSparsePoly { p: self, vars }
     }
 }
 
-impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display for FmtSparsePoly<'a, 'b, V, P, Z> {
+impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display
+    for FmtSparsePoly<'a, 'b, V, P, Z>
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some((first, rest)) = self.p.terms().split_first() {
             first.with_vars(self.vars).fmt(f)?;
@@ -442,7 +455,7 @@ impl<T: Default, const Z: usize> Default for SparseMono<T, Z> {
     fn default() -> Self {
         Self {
             coeff: Default::default(),
-            powers: [Default::default(); Z]
+            powers: [Default::default(); Z],
         }
     }
 }
@@ -457,7 +470,7 @@ impl<T: AddAssign + Zero, const Z: usize> Add for SparseMono<T, Z> {
 
 impl<T: AddAssign + Zero, const Z: usize> Sub for SparseMono<T, Z>
 where
-    SparseMono<T, Z>: Neg<Output = Self>
+    SparseMono<T, Z>: Neg<Output = Self>,
 {
     type Output = SparsePoly<T, Z>;
 
@@ -467,7 +480,8 @@ where
 }
 
 impl<T, const Z: usize> MulAssign for SparseMono<T, Z>
-where T: MulAssign
+where
+    T: MulAssign,
 {
     fn mul_assign(&mut self, rhs: SparseMono<T, Z>) {
         self.coeff *= rhs.coeff;
@@ -477,8 +491,9 @@ where T: MulAssign
     }
 }
 
-impl<'a, T, const Z: usize> MulAssign<&'a SparseMono<T,Z>> for SparseMono<T, Z>
-where T: MulAssign<&'a T>
+impl<'a, T, const Z: usize> MulAssign<&'a SparseMono<T, Z>> for SparseMono<T, Z>
+where
+    T: MulAssign<&'a T>,
 {
     fn mul_assign(&mut self, rhs: &'a SparseMono<T, Z>) {
         self.coeff *= &rhs.coeff;
@@ -489,7 +504,8 @@ where T: MulAssign<&'a T>
 }
 
 impl<T, const Z: usize> Mul<SparseMono<T, Z>> for SparseMono<T, Z>
-where T: Mul
+where
+    T: Mul,
 {
     type Output = SparseMono<<T as Mul>::Output, Z>;
 
@@ -503,7 +519,8 @@ where T: Mul
 }
 
 impl<'a, T, const Z: usize> Mul<SparseMono<T, Z>> for &'a SparseMono<T, Z>
-where &'a T: Mul<T>
+where
+    &'a T: Mul<T>,
 {
     type Output = SparseMono<<&'a T as Mul<T>>::Output, Z>;
 
@@ -518,7 +535,8 @@ where &'a T: Mul<T>
 }
 
 impl<'a, T, const Z: usize> Mul<&'a SparseMono<T, Z>> for SparseMono<T, Z>
-where T: Mul<&'a T>
+where
+    T: Mul<&'a T>,
 {
     type Output = SparseMono<<T as Mul<&'a T>>::Output, Z>;
 
@@ -531,8 +549,10 @@ where T: Mul<&'a T>
     }
 }
 
-impl<'a, 'b, T, const Z: usize> Mul<&'b SparseMono<T, Z>> for &'a SparseMono<T, Z>
-where &'a T: Mul<&'b T>
+impl<'a, 'b, T, const Z: usize> Mul<&'b SparseMono<T, Z>>
+    for &'a SparseMono<T, Z>
+where
+    &'a T: Mul<&'b T>,
 {
     type Output = SparseMono<<&'a T as Mul<&'b T>>::Output, Z>;
 
@@ -547,7 +567,8 @@ where &'a T: Mul<&'b T>
 }
 
 impl<T, const Z: usize> DivAssign<SparseMono<T, Z>> for SparseMono<T, Z>
-where T: DivAssign<T>
+where
+    T: DivAssign<T>,
 {
     fn div_assign(&mut self, rhs: SparseMono<T, Z>) {
         self.coeff /= rhs.coeff;
@@ -558,7 +579,8 @@ where T: DivAssign<T>
 }
 
 impl<T, const Z: usize> Div<SparseMono<T, Z>> for SparseMono<T, Z>
-where T: Div<T>
+where
+    T: Div<T>,
 {
     type Output = SparseMono<<T as Div<T>>::Output, Z>;
 
@@ -572,7 +594,8 @@ where T: Div<T>
 }
 
 impl<'a, T, const Z: usize> Div<SparseMono<T, Z>> for &'a SparseMono<T, Z>
-where &'a T: Div<T>
+where
+    &'a T: Div<T>,
 {
     type Output = SparseMono<<&'a T as Div<T>>::Output, Z>;
 
@@ -587,7 +610,8 @@ where &'a T: Div<T>
 }
 
 impl<'a, T, const Z: usize> Div<&'a SparseMono<T, Z>> for SparseMono<T, Z>
-where T: Div<&'a T>
+where
+    T: Div<&'a T>,
 {
     type Output = SparseMono<<T as Div<&'a T>>::Output, Z>;
 
@@ -600,8 +624,10 @@ where T: Div<&'a T>
     }
 }
 
-impl<'a, 'b, T, const Z: usize> Div<&'b SparseMono<T, Z>> for &'a SparseMono<T, Z>
-where &'a T: Div<&'b T>
+impl<'a, 'b, T, const Z: usize> Div<&'b SparseMono<T, Z>>
+    for &'a SparseMono<T, Z>
+where
+    &'a T: Div<&'b T>,
 {
     type Output = SparseMono<<&'a T as Div<&'b T>>::Output, Z>;
 
@@ -616,7 +642,8 @@ where &'a T: Div<&'b T>
 }
 
 impl<T, const Z: usize> MulAssign<T> for SparseMono<T, Z>
-where T: MulAssign
+where
+    T: MulAssign,
 {
     fn mul_assign(&mut self, rhs: T) {
         self.coeff *= rhs;
@@ -624,7 +651,8 @@ where T: MulAssign
 }
 
 impl<'a, T, const Z: usize> MulAssign<&'a T> for SparseMono<T, Z>
-where T: MulAssign<&'a T>
+where
+    T: MulAssign<&'a T>,
 {
     fn mul_assign(&mut self, rhs: &'a T) {
         self.coeff *= rhs;
@@ -632,7 +660,8 @@ where T: MulAssign<&'a T>
 }
 
 impl<T, const Z: usize> Mul<T> for SparseMono<T, Z>
-where T: Mul<T>
+where
+    T: Mul<T>,
 {
     type Output = SparseMono<<T as Mul<T>>::Output, Z>;
 
@@ -642,7 +671,8 @@ where T: Mul<T>
 }
 
 impl<'a, T, const Z: usize> Mul<&'a T> for SparseMono<T, Z>
-where T: Mul<&'a T>
+where
+    T: Mul<&'a T>,
 {
     type Output = SparseMono<<T as Mul<&'a T>>::Output, Z>;
 
@@ -652,7 +682,8 @@ where T: Mul<&'a T>
 }
 
 impl<'a, T, const Z: usize> Mul<T> for &'a SparseMono<T, Z>
-where &'a T: Mul<T>
+where
+    &'a T: Mul<T>,
 {
     type Output = SparseMono<<&'a T as Mul<T>>::Output, Z>;
 
@@ -662,7 +693,8 @@ where &'a T: Mul<T>
 }
 
 impl<'a, 'b, T, const Z: usize> Mul<&'a T> for &'b SparseMono<T, Z>
-where &'b T: Mul<&'a T>
+where
+    &'b T: Mul<&'a T>,
 {
     type Output = SparseMono<<&'b T as Mul<&'a T>>::Output, Z>;
 
@@ -672,7 +704,8 @@ where &'b T: Mul<&'a T>
 }
 
 impl<T, const Z: usize> DivAssign<T> for SparseMono<T, Z>
-where T: DivAssign
+where
+    T: DivAssign,
 {
     fn div_assign(&mut self, rhs: T) {
         self.coeff /= rhs;
@@ -680,7 +713,8 @@ where T: DivAssign
 }
 
 impl<'a, T, const Z: usize> DivAssign<&'a T> for SparseMono<T, Z>
-where T: DivAssign<&'a T>
+where
+    T: DivAssign<&'a T>,
 {
     fn div_assign(&mut self, rhs: &'a T) {
         self.coeff /= rhs;
@@ -688,7 +722,8 @@ where T: DivAssign<&'a T>
 }
 
 impl<T, const Z: usize> Div<T> for SparseMono<T, Z>
-where T: Div<T>
+where
+    T: Div<T>,
 {
     type Output = SparseMono<<T as Div<T>>::Output, Z>;
 
@@ -698,7 +733,8 @@ where T: Div<T>
 }
 
 impl<'a, T, const Z: usize> Div<&'a T> for SparseMono<T, Z>
-where T: Div<&'a T>
+where
+    T: Div<&'a T>,
 {
     type Output = SparseMono<<T as Div<&'a T>>::Output, Z>;
 
@@ -708,7 +744,8 @@ where T: Div<&'a T>
 }
 
 impl<'a, T, const Z: usize> Div<T> for &'a SparseMono<T, Z>
-where &'a T: Div<T>
+where
+    &'a T: Div<T>,
 {
     type Output = SparseMono<<&'a T as Div<T>>::Output, Z>;
 
@@ -718,7 +755,8 @@ where &'a T: Div<T>
 }
 
 impl<'a, 'b, T, const Z: usize> Div<&'a T> for &'b SparseMono<T, Z>
-where &'b T: Div<&'a T>
+where
+    &'b T: Div<&'a T>,
 {
     type Output = SparseMono<<&'b T as Div<&'a T>>::Output, Z>;
 
@@ -757,8 +795,7 @@ impl<T: One, const Z: usize> One for SparseMono<T, Z> {
     }
 
     fn is_one(&self) -> bool {
-        self.coeff.is_one()
-            && self.powers.iter().all(|&p| p == 0)
+        self.coeff.is_one() && self.powers.iter().all(|&p| p == 0)
     }
 }
 
@@ -768,40 +805,48 @@ impl<T: One, const Z: usize> From<T> for SparseMono<T, Z> {
     }
 }
 
-impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z> {
+impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
+    for SparseMono<Z64<P>, Z>
+{
     type Output = Z64<P>;
 
     fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
-        Some(self.coeff * x.iter().zip(self.powers.iter().copied()).fold(
-            Z64::one(),
-            |acc, (x, y)| acc * x.pow(y)
-        ))
+        Some(
+            self.coeff
+                * x.iter()
+                    .zip(self.powers.iter().copied())
+                    .fold(Z64::one(), |acc, (x, y)| acc * x.pow(y)),
+        )
     }
 }
 
-impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z> { }
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z> {}
 
 pub struct FmtSparseMono<'a, V, const P: u64, const Z: usize> {
     m: SparseMono<Z64<P>, Z>,
     vars: &'a [V],
 }
 
-impl<'a, 'b, V: Display, const P: u64, const Z: usize> WithVars<'a, &'b [V; Z]> for SparseMono<Z64<P>, Z> {
+impl<'a, 'b, V: Display, const P: u64, const Z: usize> WithVars<'a, &'b [V; Z]>
+    for SparseMono<Z64<P>, Z>
+{
     type Output = FmtSparseMono<'b, V, P, Z>;
 
     fn with_vars(&'a self, vars: &'b [V; Z]) -> Self::Output {
-        FmtSparseMono{ m: *self, vars }
+        FmtSparseMono { m: *self, vars }
     }
 }
 
-impl<'a, V: Display, const P: u64, const Z: usize> Display for FmtSparseMono<'a, V, P, Z> {
+impl<'a, V: Display, const P: u64, const Z: usize> Display
+    for FmtSparseMono<'a, V, P, Z>
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.m.coeff)?;
         if !self.m.is_one() && !self.m.is_zero() {
             debug_assert_eq!(self.m.powers.len(), self.vars.len());
             for (p, v) in self.m.powers.iter().zip(self.vars.iter()) {
                 match p {
-                    0 => {},
+                    0 => {}
                     1 => write!(f, "*{v}")?,
                     _ => write!(f, "*{v}^{p}")?,
                 }
@@ -842,12 +887,11 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         for _ in 0..NTESTS {
             let len = rng.gen_range(0..=MAX_LEN);
-            let terms: Vec<SparseMono<Z64<P>, 1>> = std::iter::repeat_with(
-                || SparseMono::new(
-                    rng.gen(),
-                    [rng.gen_range(0..=MAX_POW)]
-                )
-            ).take(len)
+            let terms: Vec<SparseMono<Z64<P>, 1>> =
+                std::iter::repeat_with(|| {
+                    SparseMono::new(rng.gen(), [rng.gen_range(0..=MAX_POW)])
+                })
+                .take(len)
                 .collect();
             let poly = SparsePoly::from_terms(terms);
             eprintln!("original: {poly}");
@@ -871,12 +915,17 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         for _ in 0..NTESTS {
             let len = rng.gen_range(0..=MAX_LEN);
-            let terms: Vec<SparseMono<Z64<P>, 2>> = std::iter::repeat_with(
-                || SparseMono::new(
-                    rng.gen(),
-                    [rng.gen_range(0..=MAX_POW), rng.gen_range(0..=MAX_POW)]
-                )
-            ).take(len)
+            let terms: Vec<SparseMono<Z64<P>, 2>> =
+                std::iter::repeat_with(|| {
+                    SparseMono::new(
+                        rng.gen(),
+                        [
+                            rng.gen_range(0..=MAX_POW),
+                            rng.gen_range(0..=MAX_POW),
+                        ],
+                    )
+                })
+                .take(len)
                 .collect();
             let poly = SparsePoly::from_terms(terms);
             eprintln!("original: {poly}");
@@ -887,5 +936,4 @@ mod tests {
             assert_eq!(poly, reexpanded);
         }
     }
-
 }

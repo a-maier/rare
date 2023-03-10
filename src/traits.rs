@@ -1,16 +1,13 @@
 use std::num::NonZeroUsize;
 
 use galois_fields::Z64;
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
 pub trait Rec<R, Args> {
     type Output;
 
-    fn rec_with_ran(
-        &mut self,
-        reconstructor: R,
-        rng: impl Rng
-    ) -> Self::Output;
+    fn rec_with_ran(&mut self, reconstructor: R, rng: impl Rng)
+        -> Self::Output;
 
     fn rec(&mut self, reconstructor: R) -> Self::Output {
         self.rec_with_ran(reconstructor, thread_rng())
@@ -73,9 +70,7 @@ impl<const P: u64> One for Z64<P> {
 
 impl One for NonZeroUsize {
     fn one() -> Self {
-        unsafe {
-            Self::new_unchecked(1)
-        }
+        unsafe { Self::new_unchecked(1) }
     }
 
     fn is_one(&self) -> bool {
@@ -109,10 +104,12 @@ macro_rules! impl_zero_one {
     };
 }
 
-impl_zero_one!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64);
+impl_zero_one!(
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64
+);
 
 pub trait Cardinality {
-    fn cardinality()-> Option<usize>;
+    fn cardinality() -> Option<usize>;
 }
 
 macro_rules! impl_cardinality_from_bits {
@@ -130,7 +127,7 @@ macro_rules! impl_cardinality_from_bits {
 impl_cardinality_from_bits!(i8, i16, i32, u8, u16, u32);
 
 impl<const P: u64> Cardinality for Z64<P> {
-    fn cardinality()-> Option<usize> {
+    fn cardinality() -> Option<usize> {
         Some(P as usize)
     }
 }

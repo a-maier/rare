@@ -4,7 +4,16 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use galois_fields::Z64;
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
-use rare::{dense_poly::{DensePoly, DensePoly2}, traits::{Eval, Rec, Zero, One, TryEval}, rec_newton::{NewtonRec, NewtonPoly, NewtonPoly2}, rat::Rat, rec_rat::RatRec, rec_thiele::{ThieleRat, ThieleRec}, rec_linear::LinearRec, sparse_poly::SparsePoly};
+use rare::{
+    dense_poly::{DensePoly, DensePoly2},
+    rat::Rat,
+    rec_linear::LinearRec,
+    rec_newton::{NewtonPoly, NewtonPoly2, NewtonRec},
+    rec_rat::RatRec,
+    rec_thiele::{ThieleRat, ThieleRec},
+    sparse_poly::SparsePoly,
+    traits::{Eval, One, Rec, TryEval, Zero},
+};
 
 fn gen_poly1<const P: u64>(n: u32, mut rng: impl Rng) -> DensePoly<Z64<P>> {
     let max_pow = rng.gen_range(0..=n);
@@ -16,7 +25,9 @@ fn gen_poly1<const P: u64>(n: u32, mut rng: impl Rng) -> DensePoly<Z64<P>> {
 fn gen_poly2<const P: u64>(n: u32, mut rng: impl Rng) -> DensePoly2<Z64<P>> {
     let max_pow = rng.gen_range(0..=n);
     let nterms = 2usize.pow(max_pow);
-    let coeff = repeat_with(|| gen_poly1(n, &mut rng)).take(nterms).collect();
+    let coeff = repeat_with(|| gen_poly1(n, &mut rng))
+        .take(nterms)
+        .collect();
     DensePoly::from_coeff(coeff)
 }
 
@@ -32,7 +43,10 @@ fn gen_rat1<const P: u64>(n: u32, mut rng: impl Rng) -> Rat<DensePoly<Z64<P>>> {
     Rat::from_num_den_unchecked(num, den)
 }
 
-fn gen_rat2<const P: u64>(n: u32, mut rng: impl Rng) -> Rat<DensePoly2<Z64<P>>> {
+fn gen_rat2<const P: u64>(
+    n: u32,
+    mut rng: impl Rng,
+) -> Rat<DensePoly2<Z64<P>>> {
     let num = gen_poly2(n, &mut rng);
     let den = if num.is_zero() {
         One::one()
@@ -47,7 +61,7 @@ fn gen_rat2<const P: u64>(n: u32, mut rng: impl Rng) -> Rat<DensePoly2<Z64<P>>> 
 }
 
 fn rec_poly1<const P: u64>(
-    polys: &[DensePoly<Z64<P>>]
+    polys: &[DensePoly<Z64<P>>],
 ) -> Vec<NewtonPoly<Z64<P>>> {
     let mut res = Vec::with_capacity(polys.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
@@ -63,7 +77,7 @@ fn rec_poly1<const P: u64>(
 }
 
 fn rec_poly1_expanded<const P: u64>(
-    polys: &[DensePoly<Z64<P>>]
+    polys: &[DensePoly<Z64<P>>],
 ) -> Vec<DensePoly<Z64<P>>> {
     let mut res = Vec::with_capacity(polys.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
@@ -79,39 +93,35 @@ fn rec_poly1_expanded<const P: u64>(
 }
 
 fn rec_poly2<const P: u64>(
-    polys: &[DensePoly2<Z64<P>>]
+    polys: &[DensePoly2<Z64<P>>],
 ) -> Vec<NewtonPoly2<Z64<P>>> {
     let mut res = Vec::with_capacity(polys.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
     let rec = NewtonRec::new(1);
 
     for poly in polys {
-        let p = (|x| poly.eval(&x))
-            .rec_with_ran(rec, &mut rng)
-            .unwrap();
+        let p = (|x| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
         res.push(p);
     }
     res
 }
 
 fn rec_poly2_expanded<const P: u64>(
-    polys: &[DensePoly2<Z64<P>>]
+    polys: &[DensePoly2<Z64<P>>],
 ) -> Vec<DensePoly2<Z64<P>>> {
     let mut res = Vec::with_capacity(polys.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
     let rec = NewtonRec::new(1);
 
     for poly in polys {
-        let p = (|x| poly.eval(&x))
-            .rec_with_ran(rec, &mut rng)
-            .unwrap();
+        let p = (|x| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
         res.push(p.into());
     }
     res
 }
 
 fn rec_rat1<const P: u64>(
-    rats: &[Rat<DensePoly<Z64<P>>>]
+    rats: &[Rat<DensePoly<Z64<P>>>],
 ) -> Vec<ThieleRat<Z64<P>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
@@ -127,7 +137,7 @@ fn rec_rat1<const P: u64>(
 }
 
 fn rec_rat1_expanded<const P: u64>(
-    rats: &[Rat<DensePoly<Z64<P>>>]
+    rats: &[Rat<DensePoly<Z64<P>>>],
 ) -> Vec<Rat<DensePoly<Z64<P>>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
@@ -143,13 +153,16 @@ fn rec_rat1_expanded<const P: u64>(
 }
 
 fn rec_rat1_linear<const P: u64>(
-    rats: &[Rat<DensePoly<Z64<P>>>]
+    rats: &[Rat<DensePoly<Z64<P>>>],
 ) -> Vec<Rat<DensePoly<Z64<P>>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
     for rat in rats {
-        let rec = LinearRec::new(rat.num().len(), rat.den().len().try_into().unwrap());
+        let rec = LinearRec::new(
+            rat.num().len(),
+            rat.den().len().try_into().unwrap(),
+        );
         let p = (|x: Z64<P>| rat.try_eval(&x))
             .rec_with_ran(rec, &mut rng)
             .unwrap();
@@ -159,7 +172,7 @@ fn rec_rat1_linear<const P: u64>(
 }
 
 fn rec_rat2<const P: u64>(
-    rats: &[Rat<DensePoly2<Z64<P>>>]
+    rats: &[Rat<DensePoly2<Z64<P>>>],
 ) -> Vec<Rat<SparsePoly<Z64<P>, 2>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
@@ -184,30 +197,22 @@ fn criterion_benchmark(c: &mut Criterion) {
     for poly in &mut polys {
         *poly = gen_poly1(N, &mut rng)
     }
-    c.bench_function(
-        "poly1",
-        |b| b.iter(|| rec_poly1(&polys))
-    );
+    c.bench_function("poly1", |b| b.iter(|| rec_poly1(&polys)));
 
-    c.bench_function(
-        "poly1 expanded",
-        |b| b.iter(|| rec_poly1_expanded(&polys))
-    );
+    c.bench_function("poly1 expanded", |b| {
+        b.iter(|| rec_poly1_expanded(&polys))
+    });
 
     let mut polys: [DensePoly2<Z64<P>>; NPOLYS] = Default::default();
     for poly in &mut polys {
         *poly = gen_poly2(N / 2, &mut rng)
     }
 
-    c.bench_function(
-        "poly2",
-        |b| b.iter(|| rec_poly2(&polys))
-    );
+    c.bench_function("poly2", |b| b.iter(|| rec_poly2(&polys)));
 
-    c.bench_function(
-        "poly2 expanded",
-        |b| b.iter(|| rec_poly2_expanded(&polys))
-    );
+    c.bench_function("poly2 expanded", |b| {
+        b.iter(|| rec_poly2_expanded(&polys))
+    });
     std::mem::drop(polys);
 
     let mut rats: [Rat<DensePoly<Z64<P>>>; NPOLYS] = Default::default();
@@ -215,31 +220,20 @@ fn criterion_benchmark(c: &mut Criterion) {
         *rat = gen_rat1(N / 2, &mut rng)
     }
 
-    c.bench_function(
-        "rat1 thiele",
-        |b| b.iter(|| rec_rat1(&rats))
-    );
+    c.bench_function("rat1 thiele", |b| b.iter(|| rec_rat1(&rats)));
 
-    c.bench_function(
-        "rat1 thiele expanded",
-        |b| b.iter(|| rec_rat1_expanded(&rats))
-    );
+    c.bench_function("rat1 thiele expanded", |b| {
+        b.iter(|| rec_rat1_expanded(&rats))
+    });
 
-    c.bench_function(
-        "rat1 linear",
-        |b| b.iter(|| rec_rat1_linear(&rats))
-    );
+    c.bench_function("rat1 linear", |b| b.iter(|| rec_rat1_linear(&rats)));
 
     let mut rats: [Rat<DensePoly2<Z64<P>>>; NPOLYS] = Default::default();
     for rat in &mut rats {
         *rat = gen_rat2(N / 2, &mut rng)
     }
 
-    c.bench_function(
-        "rat2",
-        |b| b.iter(|| rec_rat2(&rats))
-    );
-
+    c.bench_function("rat2", |b| b.iter(|| rec_rat2(&rats)));
 }
 
 criterion_group!(benches, criterion_benchmark);
