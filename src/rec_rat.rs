@@ -178,7 +178,6 @@ macro_rules! impl_rec_helper {
                     extra_pts: usize,
                     base_coord: [Z64<P>; $x],
                     shift: [Z64<P>; $x],
-                    subtr: [<ShiftSubtraction $x>]<P>,
                     num: SparsePoly<Z64<P>, $x>,
                     den: SparsePoly<Z64<P>, $x>,
                     num_coeff_known: usize,
@@ -236,10 +235,7 @@ macro_rules! impl_rec_helper {
 
                             let first_pt = known.next().unwrap();
                             let mut next_offset = first_pt.0;
-                            let coord = add(base_x_coord, next_offset);
-                            let subtr = self.subtr.eval(wot, coeff_idx, &coord);
-                            trace!("Subtraction from shift: {subtr}");
-                            let mut next_val = first_pt.1 - subtr;
+                            let mut next_val = first_pt.1;
                             loop {
                                 let coord = add(base_x_coord, next_offset);
                                 match poly.add_pt(&coord, next_val) {
@@ -260,10 +256,7 @@ macro_rules! impl_rec_helper {
                                         match known.peek() {
                                             Some((offset, val)) if offset == &next_offset => {
                                                 trace!("Using known value at offset {next_offset:?}: {val}");
-                                                let coord = add(base_x_coord, next_offset);
-                                                let subtr = self.subtr.eval(wot, coeff_idx, &coord);
-                                                trace!("Subtraction from shift: {subtr}");
-                                                next_val = *val - subtr;
+                                                next_val = *val;
                                             },
                                             _ => {
                                                 trace!("Need new value at offset {next_offset:?}");
@@ -367,50 +360,37 @@ macro_rules! impl_rec_helper {
                         let subtr = SparsePoly::from_terms(terms.collect());
                         let subtr = [<DensePoly $x>]::from(subtr);
                         trace!("shift subtraction in [t, x1, ...]: {subtr}");
-                        self.subtr.add_subtr(wot, subtr);
+                        match wot {
+                            NumOrDen::Num => self.subtr_from_num(subtr),
+                            NumOrDen::Den => self.subtr_from_den(subtr),
+                        }
                     }
 
                     pub(crate) fn into_rec(self) -> [SparsePoly<Z64<P>, $x>; 2] {
                         [self.num, self.den]
                     }
-                }
 
-                // Shift subtraction polynomials
-                // Note that the order of variables is [t, x0, x1, ...]
-                // i.e. unlike elsewhere t goes first
-                #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-                struct [<ShiftSubtraction $x>]<const P: u64> {
-                    num_subtr: [<DensePoly $x>]<Z64<P>>,
-                    den_subtr: [<DensePoly $x>]<Z64<P>>,
-                }
-
-                impl<const P: u64> [<ShiftSubtraction $x>]<P> {
-                    fn add_subtr(&mut self, wot: NumOrDen, subtr : [<DensePoly $x>]<Z64<P>>) {
-                        match wot {
-                            NumOrDen::Num => self.num_subtr += subtr,
-                            NumOrDen::Den => self.den_subtr += subtr,
-                        }
-                    }
-
-                    fn eval(
-                        &self,
-                        wot: NumOrDen,
-                        idx: usize,
-                        pt: &[Z64<P>; $y]
-                    ) -> Z64<P> {
-                        match wot {
-                            NumOrDen::Num => if idx >= self.num_subtr.len() {
-                                Z64::zero()
-                            } else {
-                                self.num_subtr.coeff(idx).eval(pt)
-                            },
-                            NumOrDen::Den => if idx >= self.den_subtr.len() {
-                                Z64::zero()
-                            } else {
-                                self.den_subtr.coeff(idx).eval(pt)
+                    fn subtr_from_num(&mut self, poly: [<DensePoly $x>]<Z64<P>>) {
+                        let base_x_coord: [Z64<P>; $y] = self.base_coord[..$y].try_into().unwrap();
+                        for pt in &mut self.known_pts {
+                            let coord = add(base_x_coord, pt.offset);
+                            for coeff_idx in 0..poly.len() {
+                                pt.num_coeff[coeff_idx] -= poly.coeff(coeff_idx).eval(&coord);
                             }
                         }
                     }
+
+                    fn subtr_from_den(&mut self, poly: [<DensePoly $x>]<Z64<P>>) {
+                        // TODO: code duplication
+                        let base_x_coord: [Z64<P>; $y] = self.base_coord[..$y].try_into().unwrap();
+                        for pt in &mut self.known_pts {
+                            let coord = add(base_x_coord, pt.offset);
+                            for coeff_idx in 0..poly.len() {
+                                pt.den_coeff[coeff_idx] -= poly.coeff(coeff_idx).eval(&coord);
+                            }
+                        }
+                    }
+
                 }
             }
         )*
