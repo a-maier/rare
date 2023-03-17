@@ -19,7 +19,7 @@ use crate::{
 
 /// Rational function reconstruction
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct RatRec {
+pub struct RatRecMod {
     extra_pts: usize,
 }
 
@@ -34,7 +34,7 @@ trait RecWithRanAndShift<const N: usize> {
         F: FnMut([Z64<P>; N]) -> Option<Z64<P>>;
 }
 
-impl RatRec {
+impl RatRecMod {
     pub fn new(extra_pts: usize) -> Self {
         Self { extra_pts }
     }
@@ -44,7 +44,7 @@ macro_rules! impl_rec_with_ran_and_shift {
     ( $($x:literal, $y:literal), * ) => {
         $(
             paste! {
-                impl RecWithRanAndShift<$x> for RatRec {
+                impl RecWithRanAndShift<$x> for RatRecMod {
                     fn rec_with_ran_and_shift<F, const P: u64>(
                         &self,
                         mut f: F,
@@ -150,13 +150,13 @@ macro_rules! impl_rec_with_ran {
     ( $($x:literal), *) => {
         $(
 
-            impl<F, const P: u64> Rec<RatRec, [Z64<P>; $x]> for F
+            impl<F, const P: u64> Rec<RatRecMod, [Z64<P>; $x]> for F
             where F: FnMut([Z64<P>; $x]) -> Option<Z64<P>> {
                 type Output = Option<Rat<SparsePoly<Z64<P>, $x>>>;
 
                 fn rec_with_ran(
                     &mut self,
-                    rec: RatRec,
+                    rec: RatRecMod,
                     mut rng: impl Rng
                 ) -> Self::Output {
                     let shift = find_shift(|z| (self)(z), &mut rng);
@@ -471,7 +471,7 @@ mod tests {
         const MAX_COEFF: u64 = 29;
         const P: u64 = 1152921504606846883;
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-        let rec = RatRec::new(1);
+        let rec = RatRecMod::new(1);
 
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
@@ -525,7 +525,7 @@ mod tests {
         const P: u64 = 1152921504606846883;
 
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-        let rec = RatRec::new(1);
+        let rec = RatRecMod::new(1);
 
         let x = SparseMono::new(Z64::one(), [1, 0]);
         let y = SparseMono::new(Z64::one(), [0, 1]);
@@ -573,7 +573,7 @@ mod tests {
         const MAX_COEFF: u64 = 29;
         const P: u64 = 1152921504606846883;
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-        let rec = RatRec::new(1);
+        let rec = RatRecMod::new(1);
 
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
@@ -630,7 +630,7 @@ mod tests {
         const MAX_COEFF: u64 = 29;
         const P: u64 = 1152921504606846883;
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-        let rec = RatRec::new(1);
+        let rec = RatRecMod::new(1);
 
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
