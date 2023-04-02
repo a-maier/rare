@@ -4,11 +4,12 @@ use std::{
 };
 
 use galois_fields::Z64;
+use rug::{Integer, Rational};
 use thiserror::Error;
 
 use crate::{
     dense_poly::DensePoly,
-    traits::{One, TryEval, WithVars, Zero}, arr::Arr,
+    traits::{One, TryEval, WithVars, Zero}, arr::Arr, sparse_poly::{SparsePoly, SparseMono},
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -206,6 +207,42 @@ fn gcd(mut a: i64, mut b: i64) -> i64 {
         (a, b) = (b, a.rem_euclid(b))
     }
     a
+}
+
+impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>> for Rat<SparsePoly<Integer, N>> {
+    fn from(rat: Rat<SparsePoly<Z64<P>, N>>) -> Self {
+        let (num, den) = rat.into_num_den();
+        Rat::from_num_den_unchecked(num.into(), den.into())
+    }
+}
+
+impl<const N: usize> From<Rat<SparsePoly<Rational, N>>> for Rat<SparsePoly<Integer, N>> {
+    fn from(rat: Rat<SparsePoly<Rational, N>>) -> Self {
+        let (num, den) = rat.into_num_den();
+
+        let mut lcm = Integer::one();
+        let num_terms = num.terms().iter().map(|t| &t.coeff);
+        let den_terms = den.terms().iter().map(|t| &t.coeff);
+
+        for c in num_terms.chain(den_terms) {
+            lcm.lcm_mut(c.denom());
+        }
+
+        let to_int = |p: SparsePoly<Rational, N>, lcm| {
+            let terms = p.into_terms().into_iter().map(
+                |t| {
+                    let coeff: Rational = t.coeff * lcm;
+                    debug_assert!(coeff.denom().is_one());
+                    SparseMono::new(coeff.into_numer_denom().0, t.powers)
+                }
+            ).collect();
+            SparsePoly::from_raw_terms(terms)
+        };
+
+        let num = to_int(num, &lcm);
+        let den = to_int(den, &lcm);
+        Rat::from_num_den_unchecked(num, den)
+    }
 }
 
 #[cfg(test)]

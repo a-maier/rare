@@ -9,6 +9,7 @@ use std::{
 use galois_fields::Z64;
 use num_traits::Pow;
 use paste::paste;
+use rug::{Integer, integer::IntegerExt64};
 
 use crate::{
     dense_poly::{DensePoly, ALL_VARS},
@@ -337,6 +338,22 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
 }
 
 impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> {}
+
+impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
+    for SparsePoly<Integer, Z>
+{
+    type Output = Z64<P>;
+
+    fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
+        Some(
+            self.terms()
+                .iter()
+                .fold(Zero::zero(), |acc, t| acc + t.eval(x)),
+        )
+    }
+}
+
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Integer, Z> {}
 
 impl<T: Zero> From<DensePoly<T>> for SparsePoly<T, 1> {
     fn from(source: DensePoly<T>) -> Self {
@@ -822,6 +839,24 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
 
 impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Z64<P>, Z> {}
 
+impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
+    for SparseMono<Integer, Z>
+{
+    type Output = Z64<P>;
+
+    fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
+        let coeff = Z64::new_unchecked(self.coeff.mod_u64(P));
+        Some(
+            coeff
+                * x.iter()
+                .zip(self.powers.iter().copied())
+                .fold(Z64::one(), |acc, (x, y)| acc * x.pow(y)),
+        )
+    }
+}
+
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Integer, Z> {}
+
 pub struct FmtSparseMono<'a, V, const P: u64, const Z: usize> {
     m: SparseMono<Z64<P>, Z>,
     vars: &'a [V],
@@ -863,6 +898,16 @@ impl<const P: u64, const Z: usize> Display for SparseMono<Z64<P>, Z> {
         self.with_vars(&vars).fmt(f)
     }
 }
+
+impl<const P: u64, const N: usize> From<SparsePoly<Z64<P>, N>> for SparsePoly<Integer, N> {
+    fn from(p: SparsePoly<Z64<P>, N>) -> Self {
+        let terms = p.into_terms().into_iter()
+            .map(|c| SparseMono::new(i64::from(c.coeff).into(), c.powers))
+            .collect();
+        SparsePoly::from_raw_terms(terms)
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

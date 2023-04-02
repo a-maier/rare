@@ -14,11 +14,18 @@ ahash = "0.8"
 array-init = "2.1"
 galois-fields = { git = "ssh://git@gitlab.desy.de/andreas.martin.maier/galois-fields.git", features = ["num-traits", "rand"] }
 itertools = "0.10"
+lazy_static = "1.4"
 log = "0.4"
 num-traits = "0.2"
 paste = "1.0"
 rand = "0.8"
+seq-macro = "0.3"
 thiserror = "1.0"
+
+[dependencies.rug]
+version = "1.19"
+default-features = false
+features = ["integer", "rational", "float", "num-traits"]
 
 [dev-dependencies]
 criterion = "0.4"

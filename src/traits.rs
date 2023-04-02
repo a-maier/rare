@@ -2,6 +2,7 @@ use std::num::NonZeroUsize;
 
 use galois_fields::Z64;
 use rand::{thread_rng, Rng};
+use rug::{Integer, Rational};
 
 pub trait Rec<R, Args> {
     type Output;
@@ -105,7 +106,7 @@ macro_rules! impl_zero_one {
 }
 
 impl_zero_one!(
-    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64, Integer, Rational
 );
 
 pub trait Cardinality {

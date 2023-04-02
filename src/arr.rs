@@ -70,6 +70,14 @@ impl<T: Copy + MulAssign, const N: usize> MulAssign<T> for Arr<T, N> {
     }
 }
 
+impl<'a, T: MulAssign<&'a T>, const N: usize> MulAssign<&'a T> for Arr<T, N> {
+    fn mul_assign(&mut self, rhs: &'a T) {
+        for n in &mut self.0 {
+            *n *= rhs;
+        }
+    }
+}
+
 impl<T: Copy + Mul, const N: usize> Mul<T> for Arr<T, N> {
     type Output = Arr<<T as Mul>::Output, N>;
 
@@ -78,6 +86,13 @@ impl<T: Copy + Mul, const N: usize> Mul<T> for Arr<T, N> {
     }
 }
 
+impl<'a, T: Mul<&'a T>, const N: usize> Mul<&'a T> for Arr<T, N> {
+    type Output = Arr<<T as Mul<&'a T>>::Output, N>;
+
+    fn mul(self, rhs: &'a T) -> Self::Output{
+        Arr(self.0.map(|n| n * rhs))
+    }
+}
 
 impl<T: Display, const N: usize> Display for Arr<T, N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -12,6 +12,7 @@ use paste::paste;
 use crate::{
     sparse_poly::{SparseMono, SparsePoly},
     traits::{Eval, One, Shift, TryEval, WithVars, Zero},
+    util::count,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -567,11 +568,6 @@ where
 }
 
 pub type DensePoly1<T> = DensePoly<T>;
-
-macro_rules! count {
-    () => {0usize};
-    ($_head:tt $($tail:tt)*) => {1usize + count!($($tail)*)};
-}
 
 macro_rules! impl_dense_poly {
     ( $($x:literal), *) => {

@@ -8,7 +8,7 @@ use crate::{
     dense_poly::DensePoly,
     rand::pt_iter,
     rat::Rat,
-    traits::{One, Rec, TryEval, WithVars, Zero},
+    traits::{One, Rec, TryEval, WithVars, Zero}, sparse_poly::SparsePoly,
 };
 
 /// Univariate rational function reconstruction using Thiele interpolation
@@ -169,6 +169,19 @@ impl<const P: u64> From<&ThieleRat<Z64<P>>> for Rat<DensePoly<Z64<P>>> {
 }
 
 impl<const P: u64> From<ThieleRat<Z64<P>>> for Rat<DensePoly<Z64<P>>> {
+    fn from(p: ThieleRat<Z64<P>>) -> Self {
+        Self::from(&p)
+    }
+}
+
+impl<const P: u64> From<&ThieleRat<Z64<P>>> for Rat<SparsePoly<Z64<P>, 1>> {
+    fn from(p: &ThieleRat<Z64<P>>) -> Self {
+        let (num, den) = Rat::<DensePoly<Z64<P>>>::from(p).into_num_den();
+        Rat::from_num_den_unchecked(num.into(), den.into())
+    }
+}
+
+impl<const P: u64> From<ThieleRat<Z64<P>>> for Rat<SparsePoly<Z64<P>, 1>> {
     fn from(p: ThieleRat<Z64<P>>) -> Self {
         Self::from(&p)
     }

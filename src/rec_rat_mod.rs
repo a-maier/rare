@@ -14,7 +14,7 @@ use crate::{
     rec_linear::LinearRec,
     rec_thiele::ThieleRec,
     sparse_poly::{SparseMono, SparsePoly},
-    traits::{Eval, One, Rec, Shift, WithVars, Zero},
+    traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
 };
 
 /// Rational function reconstruction
@@ -167,9 +167,51 @@ macro_rules! impl_rec_with_ran {
                     )
                 }
             }
+
+            impl<F, const P: u64> Rec<RatRecMod, [[Z64<P>; $x]; 1]> for F
+            where F: TryEval<[Z64<P>; $x], Output = Z64<P>> {
+                type Output = Option<Rat<SparsePoly<Z64<P>, $x>>>;
+
+                fn rec_with_ran(
+                    &mut self,
+                    rec: RatRecMod,
+                    rng: impl Rng
+                ) -> Self::Output {
+                    (|x: [Z64<P>; $x]| self.try_eval(&x)).rec_with_ran(rec, rng)
+                }
+            }
         )*
     };
 }
+
+impl<F, const P: u64> Rec<RatRecMod, [Z64<P>; 1]> for F
+where F: FnMut([Z64<P>; 1]) -> Option<Z64<P>> {
+    type Output = Option<Rat<SparsePoly<Z64<P>, 1>>>;
+
+    fn rec_with_ran(
+        &mut self,
+        rec: RatRecMod,
+        rng: impl Rng
+    ) -> Self::Output {
+        let rec = ThieleRec::new(rec.extra_pts);
+        rec.rec_univariate_with_ran(|x: Z64<P>| (self)([x]), rng)
+            .map(|r| r.into())
+    }
+}
+
+impl<F, const P: u64> Rec<RatRecMod, [[Z64<P>; 1]; 1]> for F
+where F: TryEval<[Z64<P>; 1], Output = Z64<P>> {
+    type Output = Option<Rat<SparsePoly<Z64<P>, 1>>>;
+
+    fn rec_with_ran(
+        &mut self,
+        rec: RatRecMod,
+        rng: impl Rng
+    ) -> Self::Output {
+        (|x: [Z64<P>; 1]| self.try_eval(&x)).rec_with_ran(rec, rng)
+    }
+}
+
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 enum NumOrDen {
