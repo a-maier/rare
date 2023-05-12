@@ -9,7 +9,7 @@ use std::{
 use galois_fields::Z64;
 use num_traits::Pow;
 use paste::paste;
-use rug::{Integer, integer::IntegerExt64};
+use rug::{Integer, integer::IntegerExt64, Complete};
 
 use crate::{
     dense_poly::{DensePoly, ALL_VARS},
@@ -323,12 +323,14 @@ impl<T: Zero + One, const Z: usize> One for SparsePoly<T, Z> {
     }
 }
 
-impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
-    for SparsePoly<Z64<P>, Z>
+impl<T, const Z: usize> TryEval<[T; Z]> for SparsePoly<T, Z>
+where
+    SparseMono<T, Z>: Eval<[T; Z], Output = T>,
+    T: Add<Output = T> + Zero,
 {
-    type Output = Z64<P>;
+    type Output = T;
 
-    fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
+    fn try_eval(&self, x: &[T; Z]) -> Option<Self::Output> {
         Some(
             self.terms()
                 .iter()
@@ -337,7 +339,9 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     }
 }
 
-impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Z64<P>, Z> {}
+impl<T, const Z: usize> Eval<[T; Z]> for SparsePoly<T, Z>
+where SparsePoly<T, Z>: TryEval<[T; Z]>
+{}
 
 impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     for SparsePoly<Integer, Z>
@@ -856,6 +860,23 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
 }
 
 impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Integer, Z> {}
+
+impl<const Z: usize> TryEval<[Integer; Z]>
+    for SparseMono<Integer, Z>
+{
+    type Output = Integer;
+
+    fn try_eval(&self, x: &[Integer; Z]) -> Option<Self::Output> {
+        Some(
+            &self.coeff *
+                x.iter()
+                .zip(self.powers.iter().copied())
+                .fold(Integer::one(), |acc, (x, y)| acc * x.pow(y).complete()),
+        )
+    }
+}
+
+impl<const Z: usize> Eval<[Integer; Z]> for SparseMono<Integer, Z> {}
 
 pub struct FmtSparseMono<'a, V, const P: u64, const Z: usize> {
     m: SparseMono<Z64<P>, Z>,
