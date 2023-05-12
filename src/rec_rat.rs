@@ -74,7 +74,7 @@ where
         let mut mod_rec = FFRat::from(mod_rec);
         let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
 
-        seq!( M in 0..12 {{
+        seq!( M in 1..12 {{
             const P: u64 = paste!{ [<P M>] };
             debug!("Trying rational reconstruction over characteristic {P}");
             let next_mod_rec = Rec::<RatRecMod, [[Z64<P>; N]; 1]>::rec_with_ran(
