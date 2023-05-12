@@ -7,7 +7,7 @@ use std::{
 };
 
 use galois_fields::Z64;
-use num_traits::Pow;
+use num_traits::{Pow, Signed};
 use paste::paste;
 use rug::{Integer, integer::IntegerExt64, Complete};
 
@@ -421,15 +421,15 @@ impl_poly_conv_rec!(
     5, 5, 4, 4, 3, 3, 2, 2, 1
 );
 
-pub struct FmtSparsePoly<'a, 'b, V, const P: u64, const Z: usize> {
-    p: &'a SparsePoly<Z64<P>, Z>,
+pub struct FmtSparsePoly<'a, 'b, V, T, const Z: usize> {
+    p: &'a SparsePoly<T, Z>,
     vars: &'b [V; Z],
 }
 
-impl<'a, 'b, V: Display + 'b, const P: u64, const Z: usize>
-    WithVars<'a, &'b [V; Z]> for SparsePoly<Z64<P>, Z>
+impl<'a, 'b, V: Display + 'b, T: 'a, const Z: usize>
+    WithVars<'a, &'b [V; Z]> for SparsePoly<T, Z>
 {
-    type Output = FmtSparsePoly<'a, 'b, V, P, Z>;
+    type Output = FmtSparsePoly<'a, 'b, V, T, Z>;
 
     fn with_vars(&'a self, vars: &'b [V; Z]) -> Self::Output {
         FmtSparsePoly { p: self, vars }
@@ -437,7 +437,7 @@ impl<'a, 'b, V: Display + 'b, const P: u64, const Z: usize>
 }
 
 impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display
-    for FmtSparsePoly<'a, 'b, V, P, Z>
+    for FmtSparsePoly<'a, 'b, V, Z64<P>, Z>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some((first, rest)) = self.p.terms().split_first() {
@@ -453,6 +453,35 @@ impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display
 }
 
 impl<const P: u64, const Z: usize> Display for SparsePoly<Z64<P>, Z> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut vars = [""; Z];
+        vars.copy_from_slice(&ALL_VARS[..Z]);
+        self.with_vars(&vars).fmt(f)
+    }
+}
+
+impl<'a, 'b, V: Display, const Z: usize> Display
+    for FmtSparsePoly<'a, 'b, V, Integer, Z>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some((first, rest)) = self.p.terms().split_first() {
+            first.with_vars(self.vars).fmt(f)?;
+            for term in rest {
+                if term.coeff.is_positive() {
+                    write!(f, " + {}", term.with_vars(self.vars))?
+                } else {
+                    let term = SparseMono::new((-&term.coeff).complete(), term.powers);
+                    write!(f, " - {}", term.with_vars(self.vars))?
+                }
+            }
+            Ok(())
+        } else {
+            write!(f, "0")
+        }
+    }
+}
+
+impl<const Z: usize> Display for SparsePoly<Integer, Z> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut vars = [""; Z];
         vars.copy_from_slice(&ALL_VARS[..Z]);
@@ -878,23 +907,23 @@ impl<const Z: usize> TryEval<[Integer; Z]>
 
 impl<const Z: usize> Eval<[Integer; Z]> for SparseMono<Integer, Z> {}
 
-pub struct FmtSparseMono<'a, V, const P: u64, const Z: usize> {
-    m: SparseMono<Z64<P>, Z>,
-    vars: &'a [V],
+pub struct FmtSparseMono<'a, 'b, V, T, const Z: usize> {
+    m: &'a SparseMono<T, Z>,
+    vars: &'b [V],
 }
 
-impl<'a, 'b, V: Display, const P: u64, const Z: usize> WithVars<'a, &'b [V; Z]>
-    for SparseMono<Z64<P>, Z>
+impl<'a, 'b, V: Display, T: 'a, const Z: usize> WithVars<'a, &'b [V; Z]>
+    for SparseMono<T, Z>
 {
-    type Output = FmtSparseMono<'b, V, P, Z>;
+    type Output = FmtSparseMono<'a, 'b, V, T, Z>;
 
     fn with_vars(&'a self, vars: &'b [V; Z]) -> Self::Output {
-        FmtSparseMono { m: *self, vars }
+        FmtSparseMono { m: self, vars }
     }
 }
 
-impl<'a, V: Display, const P: u64, const Z: usize> Display
-    for FmtSparseMono<'a, V, P, Z>
+impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display
+    for FmtSparseMono<'a, 'b, V, Z64<P>, Z>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.m.coeff)?;
@@ -913,6 +942,33 @@ impl<'a, V: Display, const P: u64, const Z: usize> Display
 }
 
 impl<const P: u64, const Z: usize> Display for SparseMono<Z64<P>, Z> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut vars = [""; Z];
+        vars.copy_from_slice(&ALL_VARS);
+        self.with_vars(&vars).fmt(f)
+    }
+}
+
+impl<'a, 'b, V: Display, const Z: usize> Display
+    for FmtSparseMono<'a, 'b, V, Integer, Z>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.m.coeff)?;
+        if !self.m.is_one() && !self.m.is_zero() {
+            debug_assert_eq!(self.m.powers.len(), self.vars.len());
+            for (p, v) in self.m.powers.iter().zip(self.vars.iter()) {
+                match p {
+                    0 => {}
+                    1 => write!(f, "*{v}")?,
+                    _ => write!(f, "*{v}^{p}")?,
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<const Z: usize> Display for SparseMono<Integer, Z> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut vars = [""; Z];
         vars.copy_from_slice(&ALL_VARS);
