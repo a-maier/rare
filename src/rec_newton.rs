@@ -15,6 +15,7 @@ use crate::{
 use crate::{
     rand::pt_iter,
     traits::{One, Rec, WithVars, Zero},
+    util::{ALL_VARS, slice_start},
 };
 
 /// Univariate polynomial reconstruction using Newton interpolation
@@ -470,16 +471,8 @@ macro_rules! impl_newton_poly {
 
                 impl<const P: u64> Display for [<NewtonPoly $x>]<Z64<P>> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                        const VARS: [&str; $x] = {
-                            let mut vars = [""; $x];
-                            let mut num = 0;
-                            while num < vars.len() {
-                                vars[num] = crate::dense_poly::ALL_VARS[num];
-                                num += 1;
-                            }
-                            vars
-                        };
-                        self.with_vars(&VARS).fmt(f)
+                        let vars: &[_; $x] = slice_start(&ALL_VARS);
+                        self.with_vars(vars).fmt(f)
                     }
                 }
 

@@ -12,8 +12,9 @@ use paste::paste;
 use rug::{Integer, integer::IntegerExt64, Complete};
 
 use crate::{
-    dense_poly::{DensePoly, ALL_VARS},
+    dense_poly::DensePoly,
     traits::{Eval, One, TryEval, WithVars, Zero},
+    util::{ALL_VARS, slice_start}
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -454,8 +455,7 @@ impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display
 
 impl<const P: u64, const Z: usize> Display for SparsePoly<Z64<P>, Z> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut vars = [""; Z];
-        vars.copy_from_slice(&ALL_VARS[..Z]);
+        let vars: &[_; Z] = slice_start(&ALL_VARS);
         self.with_vars(&vars).fmt(f)
     }
 }

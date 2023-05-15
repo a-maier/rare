@@ -12,7 +12,7 @@ use paste::paste;
 use crate::{
     sparse_poly::{SparseMono, SparsePoly},
     traits::{Eval, One, Shift, TryEval, WithVars, Zero},
-    util::count,
+    util::{ALL_VARS, slice_start},
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -571,24 +571,12 @@ pub type DensePoly1<T> = DensePoly<T>;
 
 macro_rules! impl_dense_poly {
     ( $($x:literal), *) => {
-        pub(crate) const ALL_VARS: [&str; count!($($x)*)] = [$(
-            concat!("x", stringify!($x)),
-        )*];
-
         $(
             paste! {
                 impl<const P: u64> Display for [<DensePoly $x>]<Z64<P>> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                        const VARS: [&str; $x] = {
-                            let mut vars = [""; $x];
-                            let mut num = 0;
-                            while num < vars.len() {
-                                vars[num] = ALL_VARS[num];
-                                num += 1;
-                            }
-                            vars
-                        };
-                        self.with_vars(&VARS).fmt(f)
+                        let vars: &[_; $x] = slice_start(&ALL_VARS);
+                        self.with_vars(vars).fmt(f)
                     }
                 }
 
