@@ -3,8 +3,9 @@ use std::iter::repeat_with;
 use galois_fields::Z64;
 use lazy_static::lazy_static;
 use log::{debug, trace};
+use num_traits::Signed;
 use rand::Rng;
-use rug::{Integer, Rational};
+use rug::{Integer, Rational, integer::IntegerExt64, ops::RemRounding};
 use seq_macro::seq;
 use paste::paste;
 
@@ -131,14 +132,19 @@ fn combine_crt_rat<const P: u64, const N: usize>(
 fn merge_crt<const P: u64>(
     c: &mut Integer,
     d: Z64<P>,
-    _modulus: &Integer
+    modulus: &Integer
 ) {
     // TODO: check that `p_idx` gets optimised out
-
     let p_idx = large_prime_idx(P);
     debug_assert!(p_idx >= 1);
     let shift = Integer::from(&*c - u64::from(d));
     *c -= shift * &BEZOUT[p_idx - 1];
+    if c.is_negative() {
+        let new_mod = Integer::from(P * modulus);
+        *c = std::mem::take(c).rem_euc(new_mod);
+    }
+    debug_assert!(!c.is_negative());
+    debug_assert_eq!(c.mod_u64(P), u64::from(d));
 }
 
 // Terms a * N in Bézout's identity a * N + b * M = 1 for coprime N, M
