@@ -602,7 +602,11 @@ macro_rules! impl_dense_poly {
                         write!(f, "{}", coeff.map(|(pow, coeff)| {
                             let coeff = FmtUniPoly::new(coeff, &self.var[1..]);
                             match pow {
-                                0 => format!("{coeff}"),
+                                0 => if coeff.poly.nterms() > 1 {
+                                    format!("({coeff})")
+                                } else {
+                                    format!("{coeff}")
+                                },
                                 1 => if coeff.poly.is_one() {
                                     format!("{var}")
                                 } else if coeff.poly.nterms() == 1 {
