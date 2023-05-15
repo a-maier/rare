@@ -4,7 +4,8 @@ use std::{
 };
 
 use galois_fields::Z64;
-use rug::{Integer, Rational};
+use num_traits::Signed;
+use rug::{Integer, Rational, ops::NegAssign};
 use thiserror::Error;
 
 use crate::{
@@ -226,6 +227,10 @@ impl<const N: usize> From<Rat<SparsePoly<Rational, N>>> for Rat<SparsePoly<Integ
 
         for c in num_terms.chain(den_terms) {
             lcm.lcm_mut(c.denom());
+        }
+        // ensure unique normalisation: first coefficient in denominator is positive
+        if den.terms()[0].coeff.numer().is_negative() {
+            lcm.neg_assign()
         }
 
         let to_int = |p: SparsePoly<Rational, N>, lcm| {
