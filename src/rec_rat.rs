@@ -203,8 +203,10 @@ impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<SparsePoly<Rational, N>> 
         }
         let num = SparsePoly::from_raw_terms(num);
 
+        debug_assert!(source.rat.den().term(0).coeff.is_one());
         let mut den = Vec::with_capacity(source.rat.den().len());
-        for term in source.rat.den().terms() {
+        den.push(SparseMono::new(One::one(), source.rat.den().term(0).powers));
+        for term in source.rat.den().terms().iter().skip(1) {
             let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus).ok_or(NoneError{})?;
             den.push(SparseMono::new(rat_coeff, term.powers));
         }
