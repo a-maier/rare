@@ -84,8 +84,9 @@ where
             // TODO: compare already during reconstruction of `next_mod_rec`
             if let Ok(res_ref) = res.as_ref() {
                 let sample_same = repeat_with(|| [(); N].map(|_| rng.gen()))
+                    .filter_map(|pt| res_ref.try_eval(&pt).map(|v| (pt, v)))
                     .take(rec.extra_pts)
-                    .all(|pt| next_mod_rec.try_eval(&pt) == res_ref.try_eval(&pt));
+                    .all(|(pt, v)| next_mod_rec.try_eval(&pt) == Some(v));
                 if sample_same {
                     return Some(res.unwrap());
                 }
