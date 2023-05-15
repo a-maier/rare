@@ -111,11 +111,13 @@ fn combine_crt_rat<const P: u64, const N: usize>(
     debug_assert_eq!(den.len(), new_den.len());
     let mut num = num.into_terms();
     let mut den = den.into_terms();
+    debug_assert!(den[0].coeff.is_one());
     let new_num = new_num.into_terms();
     let new_den = new_den.into_terms();
+    debug_assert!(new_den[0].coeff.is_one());
 
-    let terms = num.iter_mut().chain(den.iter_mut());
-    let new_terms = new_num.into_iter().chain(new_den.into_iter());
+    let terms = num.iter_mut().chain(den.iter_mut().skip(1));
+    let new_terms = new_num.into_iter().chain(new_den.into_iter().skip(1));
     for (term, new_term) in terms.zip(new_terms) {
         debug_assert_eq!(term.powers, new_term.powers);
         merge_crt(&mut term.coeff, new_term.coeff, &modulus);
