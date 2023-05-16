@@ -56,7 +56,7 @@ impl<const P: u64> NewtonPolyRec<P> {
             };
             self.poly.coeffs.push((self.poly.a_last, y_last));
             self.poly.a_last = a;
-            trace!("p(x1) = {}", self.poly);
+            trace!("p(x0) = {}", self.poly);
         } else {
             self.poly.a_last = f_y;
         }
