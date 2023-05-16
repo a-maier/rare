@@ -878,7 +878,7 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     type Output = Z64<P>;
 
     fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
-        let coeff = Z64::new_unchecked(self.coeff.mod_u64(P));
+        let coeff = unsafe { Z64::new_unchecked(self.coeff.mod_u64(P)) };
         Some(
             coeff
                 * x.iter()

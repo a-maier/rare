@@ -516,9 +516,9 @@ fn binom<const P: u64>(n: usize, k: usize) -> Z64<P> {
     assert!((n as u64) < P);
     assert!((k as u64) < P);
     let num = ((n - k + 1)..=n)
-        .fold(Z64::one(), |acc, i| acc * Z64::new_unchecked(i as u64));
+        .fold(Z64::one(), |acc, i| acc * unsafe { Z64::new_unchecked(i as u64) });
     let den =
-        (1..=k).fold(Z64::one(), |acc, i| acc * Z64::new_unchecked(i as u64));
+        (1..=k).fold(Z64::one(), |acc, i| acc * unsafe { Z64::new_unchecked(i as u64) });
     num / den
 }
 

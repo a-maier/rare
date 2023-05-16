@@ -515,12 +515,17 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = RatRecMod::new(1);
 
+        fn ran_coeff(mut rng: impl Rng) -> Z64<P> {
+            let z = rng.gen_range(0..MAX_COEFF);
+            unsafe{ Z64::new_unchecked(z) }
+        }
+
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| {
                 SparseMono::new(
-                    Z64::<P>::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                    ran_coeff(&mut rng),
                     [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
             })
@@ -535,7 +540,7 @@ mod tests {
                 while den.is_zero() {
                     let coeff = repeat_with(|| {
                         SparseMono::new(
-                            Z64::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                            ran_coeff(&mut rng),
                             [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
                     })
@@ -617,12 +622,17 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = RatRecMod::new(1);
 
+        fn ran_coeff(mut rng: impl Rng) -> Z64<P> {
+            let z = rng.gen_range(0..MAX_COEFF);
+            unsafe{ Z64::new_unchecked(z) }
+        }
+
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| {
                 SparseMono::new(
-                    Z64::<P>::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                    ran_coeff(&mut rng),
                     [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
             })
@@ -637,7 +647,7 @@ mod tests {
                 while den.is_zero() {
                     let coeff = repeat_with(|| {
                         SparseMono::new(
-                            Z64::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                            ran_coeff(&mut rng),
                             [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
                     })
@@ -674,12 +684,17 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = RatRecMod::new(1);
 
+        fn ran_coeff(mut rng: impl Rng) -> Z64<P> {
+            let z = rng.gen_range(0..MAX_COEFF);
+            unsafe{ Z64::new_unchecked(z) }
+        }
+
         for _ in 0..NTESTS {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| {
                 SparseMono::new(
-                    Z64::<P>::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                    ran_coeff(&mut rng),
                     [(); 3].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
             })
@@ -694,7 +709,7 @@ mod tests {
                 while den.is_zero() {
                     let coeff = repeat_with(|| {
                         SparseMono::new(
-                            Z64::new_unchecked(rng.gen_range(0..MAX_COEFF)),
+                            ran_coeff(&mut rng),
                             [(); 3].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
                     })

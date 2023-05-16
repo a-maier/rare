@@ -294,7 +294,7 @@ mod tests {
                     let den_subtr = DensePoly::from_coeff(den_subtr);
                     let reconstructed = rec
                         .rec_from_seq_with_subtr((0..P).filter_map(|o| {
-                            let x = start + Z64::new_unchecked(o);
+                            let x = start + unsafe { Z64::new_unchecked(o) };
                             rat.try_eval(&x).map(|q_x| {
                                 let sub = num_subtr.eval(&x)
                                     - q_x * den_subtr.eval(&x);
