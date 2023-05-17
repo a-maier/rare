@@ -9,10 +9,9 @@ use rare::{
     rat::Rat,
     rec_linear::LinearRec,
     rec_newton::{NewtonPoly, NewtonPoly2, NewtonRec},
-    rec_rat::RatRec,
     rec_thiele::{ThieleRat, ThieleRec},
     sparse_poly::SparsePoly,
-    traits::{Eval, One, Rec, TryEval, Zero},
+    traits::{Eval, One, Rec, TryEval, Zero}, rec_rat_mod::RatRecMod,
 };
 
 fn gen_poly1<const P: u64>(n: u32, mut rng: impl Rng) -> DensePoly<Z64<P>> {
@@ -176,7 +175,7 @@ fn rec_rat2<const P: u64>(
 ) -> Vec<Rat<SparsePoly<Z64<P>, 2>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-    let rec = RatRec::new(1);
+    let rec = RatRecMod::new(1);
 
     for rat in rats {
         let p = (|x: [Z64<P>; 2]| rat.try_eval(&x))
