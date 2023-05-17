@@ -287,3 +287,82 @@ fn extended_gcd(a: Integer, b: Integer) -> ExtendedGCDResult {
         bezout: [old_s, old_t],
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ::rand::SeedableRng;
+    use rug::integer::Order;
+
+    use super::*;
+
+    const NTESTS: usize = 100;
+    const EXTRA_SAMPLES: usize = 10;
+    const MAX_TERMS: usize = 5;
+    const MAX_POW: u32 = 5;
+    const MAX_COEFF_U64_POW: usize = 2;
+
+    fn log_init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    fn rand_int(mut rng: impl Rng) -> Integer {
+        let len = rng.gen_range(1..=MAX_COEFF_U64_POW);
+        let parts = Vec::from_iter((0..len).map(|_| rng.gen::<u64>()));
+        let int = Integer::from_digits(&parts, Order::Lsf);
+        if rng.gen() {
+            int
+        } else {
+            -int
+        }
+    }
+
+    fn rand_term<const N: usize>(mut rng: impl Rng) -> SparseMono<Integer, N> {
+        let pow = [(); N].map(|_| rng.gen_range(0..=MAX_POW));
+        SparseMono::new(rand_int(rng), pow)
+    }
+
+    fn rand_poly<const N: usize>(mut rng: impl Rng) -> SparsePoly<Integer, N> {
+        let nterms = rng.gen_range(0..=MAX_TERMS);
+        SparsePoly::from_terms(
+            (0..nterms).map(|_| rand_term(&mut rng)).collect()
+        )
+    }
+
+    fn rand_rat<const N: usize>(mut rng: impl Rng) -> Rat<SparsePoly<Integer, N>> {
+        let mut den = SparsePoly::zero();
+        while den.is_zero() {
+            den = rand_poly(&mut rng);
+        }
+        let num = rand_poly(rng);
+        Rat::from_num_den_unchecked(num, den)
+    }
+
+    seq!(NVARS in 1..=3 {
+        paste! {
+            #[test]
+            fn [<rec_rat_ NVARS>]() {
+                log_init();
+
+                let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+                let mut rat_rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(128420185);
+                for _ in 0..NTESTS {
+
+                    let orig = rand_rat::<NVARS>(&mut rng);
+                    eprintln!("trying to reconstruct {orig}");
+                    let rec = orig.clone().rec_with_ran(
+                        RatRec::new(1),
+                        &mut rat_rng
+                    ).unwrap();
+
+                    for _ in 0..EXTRA_SAMPLES {
+                        let n = [(); NVARS].map(|_| rand_int(&mut rng));
+                        let orig_val = orig.try_eval(&n);
+                        let rec_val = rec.try_eval(&n);
+                        assert!((orig_val == rec_val) || orig_val.is_none())
+                    }
+                }
+            }
+        }
+    });
+
+}
