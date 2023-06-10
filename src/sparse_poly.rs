@@ -456,7 +456,7 @@ impl<'a, 'b, V: Display, const P: u64, const Z: usize> Display
 impl<const P: u64, const Z: usize> Display for SparsePoly<Z64<P>, Z> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let vars: &[_; Z] = slice_start(&ALL_VARS);
-        self.with_vars(&vars).fmt(f)
+        self.with_vars(vars).fmt(f)
     }
 }
 
