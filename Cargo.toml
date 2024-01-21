@@ -13,7 +13,7 @@ categories = ["Mathematics"]
 ahash = "0.8"
 array-init = "2.1"
 galois-fields = { git = "ssh://git@gitlab.desy.de/andreas.martin.maier/galois-fields.git", features = ["num-traits", "rand"] }
-itertools = "0.10"
+itertools = "0.12"
 lazy_static = "1.4"
 log = "0.4"
 num-traits = "0.2"
@@ -29,7 +29,7 @@ features = ["integer", "rational", "float", "num-traits"]
 
 [dev-dependencies]
 criterion = "0.5"
-env_logger = "0.10"
+env_logger = "0.11"
 rand_xoshiro = "0.6"
 
 [[bench]]
