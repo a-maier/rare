@@ -1,4 +1,4 @@
-use std::fmt::{self, Display};
+use std::{fmt::{self, Display}, ops::ControlFlow};
 
 use galois_fields::{TryDiv, Z64};
 use log::{debug, trace};
@@ -12,73 +12,98 @@ use crate::{
 };
 
 /// Univariate rational function reconstruction using Thiele interpolation
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct ThieleRec {
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct ThieleRec<const P: u64> {
     extra_pts: usize,
-}
-
-impl Default for ThieleRec {
-    fn default() -> Self {
-        Self { extra_pts: 1 }
-    }
-}
-
-fn a_next<const P: u64>(
-    rat: &ThieleRat<Z64<P>>,
+    rat: ThieleRat<Z64<P>>,
     y_last: Z64<P>,
-    y: Z64<P>,
-    f_y: Z64<P>,
-) -> Option<Z64<P>> {
-    let mut a = f_y;
-    // TODO: check if calculating `a` with less divisions is faster
-    for (ai, yi) in &rat.coeffs {
-        a = (y - yi).try_div(a - ai)?;
-    }
-    (y - y_last).try_div(a - rat.a_last)
+    rec_started: bool,
+    n_zeroes: usize,
 }
 
-impl ThieleRec {
+impl<const P: u64> Default for ThieleRec<P> {
+    fn default() -> Self {
+        Self::new(1)
+    }
+}
+
+
+impl<const P: u64> ThieleRec<P> {
     pub fn new(extra_pts: usize) -> Self {
-        Self { extra_pts }
+        Self {
+            extra_pts,
+            rat: Default::default(),
+            y_last: Z64::zero(),
+            rec_started: false,
+            n_zeroes: 0,
+        }
     }
 
-    pub fn rec_from_seq<I, const P: u64>(
+    pub fn add_pt(
+        &mut self,
+        y: Z64<P>,
+        q_y: Z64<P>
+    ) -> ControlFlow<()> {
+        trace!("Adding q({y}) = {q_y}");
+        if !self.rec_started {
+            self.rec_started = true;
+            self.rat = ThieleRat::from(q_y);
+            self.y_last = y;
+            return ControlFlow::Continue(());
+        }
+        if let Some(a) = self.a_next(y, q_y) {
+            self.n_zeroes = 0;
+            self.rat.coeffs.push((self.rat.a_last, self.y_last));
+            self.rat.a_last = a;
+            trace!("q(x1) = {}", self.rat);
+            self.y_last = y;
+        } else {
+            self.n_zeroes += 1;
+            trace!("zero ({})", self.n_zeroes);
+            if self.n_zeroes > self.extra_pts {
+                debug!("Reconstructed {}", self.rat);
+                return ControlFlow::Break(())
+            }
+        };
+        ControlFlow::Continue(())
+    }
+
+    fn a_next(
         &self,
+        y: Z64<P>,
+        f_y: Z64<P>,
+    ) -> Option<Z64<P>> {
+        let mut a = f_y;
+        // TODO: check if calculating `a` with less divisions is faster
+        for (ai, yi) in &self.rat.coeffs {
+            a = (y - yi).try_div(a - ai)?;
+        }
+        (y - self.y_last).try_div(a - self.rat.a_last)
+    }
+
+    pub fn into_rat(self) -> ThieleRat<Z64<P>> {
+        self.rat
+    }
+
+    pub fn rec_from_seq<I>(
+        mut self,
         pts: I,
     ) -> Option<ThieleRat<Z64<P>>>
     where
         I: IntoIterator<Item = (Z64<P>, Z64<P>)>,
     {
         debug!("1d rational function reconstruction");
-        let mut pts = pts.into_iter();
-        let (y0, a0) = pts.next()?;
-        trace!("Adding q({y0}) = {a0}");
-        let mut rat = ThieleRat::from(a0);
-        trace!("q(x1) = {rat}");
-        let mut y_last = y0;
-        let mut n_zeroes = 0;
-        for (y, f_y) in pts {
-            trace!("Adding q({y}) = {f_y}");
-            if let Some(a) = a_next(&rat, y_last, y, f_y) {
-                n_zeroes = 0;
-                rat.coeffs.push((rat.a_last, y_last));
-                rat.a_last = a;
-                trace!("q(x1) = {rat}");
-                y_last = y;
-            } else {
-                n_zeroes += 1;
-                trace!("zero ({n_zeroes})");
-                if n_zeroes > self.extra_pts {
-                    return Some(rat);
-                }
-            };
+        for (y, q_y) in pts {
+            if self.add_pt(y, q_y) == ControlFlow::Break(()) {
+                return Some(self.into_rat())
+            }
         }
         debug!("Reconstruction failed");
         None
     }
 
-    pub fn rec_univariate_with_ran<F, const P: u64>(
-        &self,
+    pub fn rec_univariate_with_ran<F>(
+        self,
         poly: F,
         rng: impl Rng,
     ) -> Option<ThieleRat<Z64<P>>>
@@ -88,8 +113,8 @@ impl ThieleRec {
         self.rec1_with_ran(poly, rng)
     }
 
-    pub fn rec1_with_ran<F, const P: u64>(
-        &self,
+    pub fn rec1_with_ran<F>(
+        self,
         mut poly: F,
         rng: impl Rng,
     ) -> Option<ThieleRat<Z64<P>>>
@@ -101,8 +126,8 @@ impl ThieleRec {
         )
     }
 
-    pub fn rec_univariate<F, const P: u64>(
-        &self,
+    pub fn rec_univariate<F>(
+        self,
         poly: F,
     ) -> Option<ThieleRat<Z64<P>>>
     where
@@ -248,7 +273,7 @@ impl<'a, 'b, V: Display, const P: u64> Display
     }
 }
 
-impl<F, const P: u64> Rec<ThieleRec, Z64<P>> for F
+impl<F, const P: u64> Rec<ThieleRec<P>, Z64<P>> for F
 where
     F: FnMut(Z64<P>) -> Option<Z64<P>>,
 {
@@ -256,7 +281,7 @@ where
 
     fn rec_with_ran(
         &mut self,
-        reconstructor: ThieleRec,
+        reconstructor: ThieleRec<P>,
         rng: impl ::rand::Rng,
     ) -> Self::Output {
         reconstructor.rec_from_seq(
@@ -265,7 +290,7 @@ where
     }
 }
 
-impl<F, const P: u64> Rec<ThieleRec, [Z64<P>; 1]> for F
+impl<F, const P: u64> Rec<ThieleRec<P>, [Z64<P>; 1]> for F
 where
     F: FnMut([Z64<P>; 1]) -> Option<Z64<P>>,
 {
@@ -273,7 +298,7 @@ where
 
     fn rec_with_ran(
         &mut self,
-        reconstructor: ThieleRec,
+        reconstructor: ThieleRec<P>,
         rng: impl ::rand::Rng,
     ) -> Self::Output {
         (|pt| (self)([pt])).rec_with_ran(reconstructor, rng)
@@ -301,9 +326,9 @@ mod tests {
         const P: u64 = 29;
 
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-        let rec = ThieleRec::new(1);
 
         for _ in 0..NTESTS {
+            let rec = ThieleRec::new(1);
             let rat = gen_dense_rat1(&[MAX_POW], &mut rng);
             eprintln!("trying to reconstruct {rat}");
             let reconstructed = (|x: Z64<P>| rat.try_eval(&x))
@@ -325,9 +350,9 @@ mod tests {
         const P: u64 = 1152921504606846883;
 
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-        let rec = ThieleRec::new(1);
 
         for _ in 0..NTESTS {
+            let rec = ThieleRec::new(1);
             let rat = gen_dense_rat1(&[MAX_POW], &mut rng);
             let reconstructed = (|x: Z64<P>| rat.try_eval(&x))
                 .rec_with_ran(rec, &mut rng)
