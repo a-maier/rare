@@ -862,10 +862,9 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
 
     fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
         Some(
-            self.coeff
-                * x.iter()
-                    .zip(self.powers.iter().copied())
-                    .fold(Z64::one(), |acc, (x, y)| acc * x.pow(y)),
+            x.iter()
+                .zip(self.powers.iter().copied())
+                .fold(self.coeff, |acc, (x, y)| acc * x.pow(y)),
         )
     }
 }
@@ -880,10 +879,9 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     fn try_eval(&self, x: &[Z64<P>; Z]) -> Option<Self::Output> {
         let coeff = unsafe { Z64::new_unchecked(self.coeff.mod_u64(P)) };
         Some(
-            coeff
-                * x.iter()
+            x.iter()
                 .zip(self.powers.iter().copied())
-                .fold(Z64::one(), |acc, (x, y)| acc * x.pow(y)),
+                .fold(coeff, |acc, (x, y)| acc * x.pow(y)),
         )
     }
 }
