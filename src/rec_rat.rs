@@ -1,5 +1,3 @@
-use std::iter::repeat_with;
-
 use galois_fields::Z64;
 use lazy_static::lazy_static;
 use log::{debug, trace};
@@ -9,7 +7,7 @@ use rug::{Integer, Rational, integer::IntegerExt64, ops::RemRounding};
 use seq_macro::seq;
 use paste::paste;
 
-use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::RatRecMod, arr::Arr};
+use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::RatRecMod, arr::Arr, rec_linear_multivar::rec_coeff};
 
 const LARGE_PRIMES: [u64; 12] = [
     1152921504606846883, 1152921504606846869, 1152921504606846803,
@@ -47,17 +45,17 @@ impl RatRec {
 impl<F, const N: usize> Rec<RatRec, [Integer; N]> for F
 where
     F: Rec<RatRecMod, [[Z64<P0>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P0>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P1>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P1>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P2>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P2>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P3>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P3>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P4>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P4>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P5>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P5>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P6>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P6>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P7>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P7>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P8>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P8>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P9>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P9>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P10>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P10>, N>>>>,
-    F: Rec<RatRecMod, [[Z64<P11>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P11>, N>>>>,
+    F: TryEval<[Z64<P1>; N], Output = Z64<P1>>,
+    F: TryEval<[Z64<P2>; N], Output = Z64<P2>>,
+    F: TryEval<[Z64<P3>; N], Output = Z64<P3>>,
+    F: TryEval<[Z64<P4>; N], Output = Z64<P4>>,
+    F: TryEval<[Z64<P5>; N], Output = Z64<P5>>,
+    F: TryEval<[Z64<P6>; N], Output = Z64<P6>>,
+    F: TryEval<[Z64<P7>; N], Output = Z64<P7>>,
+    F: TryEval<[Z64<P8>; N], Output = Z64<P8>>,
+    F: TryEval<[Z64<P9>; N], Output = Z64<P9>>,
+    F: TryEval<[Z64<P10>; N], Output = Z64<P10>>,
+    F: TryEval<[Z64<P11>; N], Output = Z64<P11>>,
 {
     type Output = Option<Rat<SparsePoly<Integer, N>>>;
 
@@ -72,25 +70,33 @@ where
         let mod_rec = Rec::<RatRecMod, [[Z64<P0>; N]; 1]>::rec_with_ran(
             self, rec_mod, &mut rng
         )?;
+        let ncoeff = mod_rec.num().len() + mod_rec.den().len() - 1;
+        debug!("Reconstructed rational function has {ncoeff} unknown coefficients");
         let mut mod_rec = FFRat::from(mod_rec);
         let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
 
         seq!( M in 1..12 {{
             const P: u64 = paste!{ [<P M>] };
             debug!("Trying rational reconstruction over characteristic {P}");
-            let next_mod_rec = Rec::<RatRecMod, [[Z64<P>; N]; 1]>::rec_with_ran(
-                self, rec_mod, &mut rng
-            )?;
-            // TODO: compare already during reconstruction of `next_mod_rec`
+            // next batch of sampling points
+            let mut pts = Vec::with_capacity(ncoeff);
+            while pts.len() < ncoeff {
+                let pt: [Z64<P>; N] = [(); N].map(|_| rng.gen());
+                if let Some(val) = self.try_eval(&pt) {
+                    pts.push((pt, val))
+                }
+            }
+            // if we can already reproduce the points we are done
             if let Ok(res_ref) = res.as_ref() {
-                let sample_same = repeat_with(|| [(); N].map(|_| rng.gen()))
-                    .filter_map(|pt| res_ref.try_eval(&pt).map(|v| (pt, v)))
-                    .take(rec.extra_pts)
-                    .all(|(pt, v)| next_mod_rec.try_eval(&pt) == Some(v));
+                let sample_same = pts.iter()
+                    .all(|(pt, val)| res_ref.try_eval(pt) == Some(*val));
+
                 if sample_same {
                     return Some(res.unwrap());
                 }
             }
+
+            let next_mod_rec = rec_coeff(&mod_rec.rat, &pts)?;
             mod_rec = combine_crt_rat(mod_rec, next_mod_rec);
             res  = (&mod_rec).try_into();
         }});
