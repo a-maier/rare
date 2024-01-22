@@ -129,7 +129,8 @@ where
     }
 }
 
-fn gauss_solve<T>(mut eqs: Matrix<T>, mut rhs: Vec<T>) -> Option<Vec<T>>
+// TODO: put rhs inside the matrix?
+pub(crate) fn gauss_solve<T>(mut eqs: Matrix<T>, mut rhs: Vec<T>) -> Option<Vec<T>>
 where
     T: Copy
         + Zero
@@ -145,6 +146,7 @@ where
         if eqs[(nrow, nrow)].is_zero() {
             let pivot = ((nrow + 1)..eqs.nrows())
                 .find(|&n| !eqs[(n, nrow)].is_zero())?;
+            // TODO: don't we also need to swap the rhs?
             eqs.swap_rows(nrow, pivot);
         }
         debug_assert!(!eqs[(nrow, nrow)].is_zero());
