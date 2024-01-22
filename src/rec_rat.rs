@@ -8,14 +8,48 @@ use paste::paste;
 
 use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::RatRecMod, arr::Arr, rec_linear_multivar::rec_coeff};
 
-const LARGE_PRIMES: [u64; 12] = [
+const LARGE_PRIMES: [u64; 114] = [
     1152921504606846883, 1152921504606846869, 1152921504606846803,
     1152921504606846797, 1152921504606846719, 1152921504606846697,
     1152921504606846607, 1152921504606846581, 1152921504606846577,
-    1152921504606846523, 1152921504606846419, 1152921504606846397
+    1152921504606846523, 1152921504606846419, 1152921504606846397,
+    1152921504606846347, 1152921504606846307, 1152921504606846281,
+    1152921504606846269, 1152921504606846259, 1152921504606846251,
+    1152921504606846223, 1152921504606846199, 1152921504606846179,
+    1152921504606846097, 1152921504606846043, 1152921504606845993,
+    1152921504606845977, 1152921504606845849, 1152921504606845839,
+    1152921504606845789, 1152921504606845777, 1152921504606845683,
+    1152921504606845657, 1152921504606845647, 1152921504606845527,
+    1152921504606845503, 1152921504606845473, 1152921504606845471,
+    1152921504606845399, 1152921504606845387, 1152921504606845321,
+    1152921504606845317, 1152921504606845269, 1152921504606845213,
+    1152921504606845167, 1152921504606845161, 1152921504606845147,
+    1152921504606845101, 1152921504606845027, 1152921504606844957,
+    1152921504606844933, 1152921504606844913, 1152921504606844849,
+    1152921504606844829, 1152921504606844811, 1152921504606844787,
+    1152921504606844741, 1152921504606844717, 1152921504606844691,
+    1152921504606844591, 1152921504606844519, 1152921504606844513,
+    1152921504606844447, 1152921504606844417, 1152921504606844411,
+    1152921504606844289, 1152921504606844279, 1152921504606844267,
+    1152921504606844243, 1152921504606844177, 1152921504606844127,
+    1152921504606843871, 1152921504606843863, 1152921504606843779,
+    1152921504606843733, 1152921504606843731, 1152921504606843707,
+    1152921504606843703, 1152921504606843607, 1152921504606843547,
+    1152921504606843527, 1152921504606843493, 1152921504606843479,
+    1152921504606843431, 1152921504606843421, 1152921504606843371,
+    1152921504606843353, 1152921504606843347, 1152921504606843341,
+    1152921504606843313, 1152921504606843299, 1152921504606843259,
+    1152921504606843233, 1152921504606843227, 1152921504606843221,
+    1152921504606843199, 1152921504606843173, 1152921504606843163,
+    1152921504606843107, 1152921504606843073, 1152921504606843031,
+    1152921504606842989, 1152921504606842951, 1152921504606842911,
+    1152921504606842909, 1152921504606842833, 1152921504606842809,
+    1152921504606842791, 1152921504606842753, 1152921504606842731,
+    1152921504606842669, 1152921504606842651, 1152921504606842569,
+    1152921504606842527, 1152921504606842513, 1152921504606842491,
 ];
 
-seq!(N in 0..12 {
+seq!(N in 0..114 {
     paste! { const [<P N>]: u64 = LARGE_PRIMES[N]; }
 });
 
@@ -55,6 +89,108 @@ where
     F: TryEval<[Z64<P9>; N], Output = Z64<P9>>,
     F: TryEval<[Z64<P10>; N], Output = Z64<P10>>,
     F: TryEval<[Z64<P11>; N], Output = Z64<P11>>,
+    F: TryEval<[Z64<P12>; N], Output = Z64<P12>>,
+    F: TryEval<[Z64<P13>; N], Output = Z64<P13>>,
+    F: TryEval<[Z64<P14>; N], Output = Z64<P14>>,
+    F: TryEval<[Z64<P15>; N], Output = Z64<P15>>,
+    F: TryEval<[Z64<P16>; N], Output = Z64<P16>>,
+    F: TryEval<[Z64<P17>; N], Output = Z64<P17>>,
+    F: TryEval<[Z64<P18>; N], Output = Z64<P18>>,
+    F: TryEval<[Z64<P19>; N], Output = Z64<P19>>,
+    F: TryEval<[Z64<P20>; N], Output = Z64<P20>>,
+    F: TryEval<[Z64<P21>; N], Output = Z64<P21>>,
+    F: TryEval<[Z64<P22>; N], Output = Z64<P22>>,
+    F: TryEval<[Z64<P23>; N], Output = Z64<P23>>,
+    F: TryEval<[Z64<P24>; N], Output = Z64<P24>>,
+    F: TryEval<[Z64<P25>; N], Output = Z64<P25>>,
+    F: TryEval<[Z64<P26>; N], Output = Z64<P26>>,
+    F: TryEval<[Z64<P27>; N], Output = Z64<P27>>,
+    F: TryEval<[Z64<P28>; N], Output = Z64<P28>>,
+    F: TryEval<[Z64<P29>; N], Output = Z64<P29>>,
+    F: TryEval<[Z64<P30>; N], Output = Z64<P30>>,
+    F: TryEval<[Z64<P31>; N], Output = Z64<P31>>,
+    F: TryEval<[Z64<P32>; N], Output = Z64<P32>>,
+    F: TryEval<[Z64<P33>; N], Output = Z64<P33>>,
+    F: TryEval<[Z64<P34>; N], Output = Z64<P34>>,
+    F: TryEval<[Z64<P35>; N], Output = Z64<P35>>,
+    F: TryEval<[Z64<P36>; N], Output = Z64<P36>>,
+    F: TryEval<[Z64<P37>; N], Output = Z64<P37>>,
+    F: TryEval<[Z64<P38>; N], Output = Z64<P38>>,
+    F: TryEval<[Z64<P39>; N], Output = Z64<P39>>,
+    F: TryEval<[Z64<P40>; N], Output = Z64<P40>>,
+    F: TryEval<[Z64<P41>; N], Output = Z64<P41>>,
+    F: TryEval<[Z64<P42>; N], Output = Z64<P42>>,
+    F: TryEval<[Z64<P43>; N], Output = Z64<P43>>,
+    F: TryEval<[Z64<P44>; N], Output = Z64<P44>>,
+    F: TryEval<[Z64<P45>; N], Output = Z64<P45>>,
+    F: TryEval<[Z64<P46>; N], Output = Z64<P46>>,
+    F: TryEval<[Z64<P47>; N], Output = Z64<P47>>,
+    F: TryEval<[Z64<P48>; N], Output = Z64<P48>>,
+    F: TryEval<[Z64<P49>; N], Output = Z64<P49>>,
+    F: TryEval<[Z64<P50>; N], Output = Z64<P50>>,
+    F: TryEval<[Z64<P51>; N], Output = Z64<P51>>,
+    F: TryEval<[Z64<P52>; N], Output = Z64<P52>>,
+    F: TryEval<[Z64<P53>; N], Output = Z64<P53>>,
+    F: TryEval<[Z64<P54>; N], Output = Z64<P54>>,
+    F: TryEval<[Z64<P55>; N], Output = Z64<P55>>,
+    F: TryEval<[Z64<P56>; N], Output = Z64<P56>>,
+    F: TryEval<[Z64<P57>; N], Output = Z64<P57>>,
+    F: TryEval<[Z64<P58>; N], Output = Z64<P58>>,
+    F: TryEval<[Z64<P59>; N], Output = Z64<P59>>,
+    F: TryEval<[Z64<P60>; N], Output = Z64<P60>>,
+    F: TryEval<[Z64<P61>; N], Output = Z64<P61>>,
+    F: TryEval<[Z64<P62>; N], Output = Z64<P62>>,
+    F: TryEval<[Z64<P63>; N], Output = Z64<P63>>,
+    F: TryEval<[Z64<P64>; N], Output = Z64<P64>>,
+    F: TryEval<[Z64<P65>; N], Output = Z64<P65>>,
+    F: TryEval<[Z64<P66>; N], Output = Z64<P66>>,
+    F: TryEval<[Z64<P67>; N], Output = Z64<P67>>,
+    F: TryEval<[Z64<P68>; N], Output = Z64<P68>>,
+    F: TryEval<[Z64<P69>; N], Output = Z64<P69>>,
+    F: TryEval<[Z64<P70>; N], Output = Z64<P70>>,
+    F: TryEval<[Z64<P71>; N], Output = Z64<P71>>,
+    F: TryEval<[Z64<P72>; N], Output = Z64<P72>>,
+    F: TryEval<[Z64<P73>; N], Output = Z64<P73>>,
+    F: TryEval<[Z64<P74>; N], Output = Z64<P74>>,
+    F: TryEval<[Z64<P75>; N], Output = Z64<P75>>,
+    F: TryEval<[Z64<P76>; N], Output = Z64<P76>>,
+    F: TryEval<[Z64<P77>; N], Output = Z64<P77>>,
+    F: TryEval<[Z64<P78>; N], Output = Z64<P78>>,
+    F: TryEval<[Z64<P79>; N], Output = Z64<P79>>,
+    F: TryEval<[Z64<P80>; N], Output = Z64<P80>>,
+    F: TryEval<[Z64<P81>; N], Output = Z64<P81>>,
+    F: TryEval<[Z64<P82>; N], Output = Z64<P82>>,
+    F: TryEval<[Z64<P83>; N], Output = Z64<P83>>,
+    F: TryEval<[Z64<P84>; N], Output = Z64<P84>>,
+    F: TryEval<[Z64<P85>; N], Output = Z64<P85>>,
+    F: TryEval<[Z64<P86>; N], Output = Z64<P86>>,
+    F: TryEval<[Z64<P87>; N], Output = Z64<P87>>,
+    F: TryEval<[Z64<P88>; N], Output = Z64<P88>>,
+    F: TryEval<[Z64<P89>; N], Output = Z64<P89>>,
+    F: TryEval<[Z64<P90>; N], Output = Z64<P90>>,
+    F: TryEval<[Z64<P91>; N], Output = Z64<P91>>,
+    F: TryEval<[Z64<P92>; N], Output = Z64<P92>>,
+    F: TryEval<[Z64<P93>; N], Output = Z64<P93>>,
+    F: TryEval<[Z64<P94>; N], Output = Z64<P94>>,
+    F: TryEval<[Z64<P95>; N], Output = Z64<P95>>,
+    F: TryEval<[Z64<P96>; N], Output = Z64<P96>>,
+    F: TryEval<[Z64<P97>; N], Output = Z64<P97>>,
+    F: TryEval<[Z64<P98>; N], Output = Z64<P98>>,
+    F: TryEval<[Z64<P99>; N], Output = Z64<P99>>,
+    F: TryEval<[Z64<P100>; N], Output = Z64<P100>>,
+    F: TryEval<[Z64<P101>; N], Output = Z64<P101>>,
+    F: TryEval<[Z64<P102>; N], Output = Z64<P102>>,
+    F: TryEval<[Z64<P103>; N], Output = Z64<P103>>,
+    F: TryEval<[Z64<P104>; N], Output = Z64<P104>>,
+    F: TryEval<[Z64<P105>; N], Output = Z64<P105>>,
+    F: TryEval<[Z64<P106>; N], Output = Z64<P106>>,
+    F: TryEval<[Z64<P107>; N], Output = Z64<P107>>,
+    F: TryEval<[Z64<P108>; N], Output = Z64<P108>>,
+    F: TryEval<[Z64<P109>; N], Output = Z64<P109>>,
+    F: TryEval<[Z64<P110>; N], Output = Z64<P110>>,
+    F: TryEval<[Z64<P111>; N], Output = Z64<P111>>,
+    F: TryEval<[Z64<P112>; N], Output = Z64<P112>>,
+    F: TryEval<[Z64<P113>; N], Output = Z64<P113>>,
 {
     type Output = Option<Rat<SparsePoly<Integer, N>>>;
 
@@ -74,7 +210,7 @@ where
         let mut mod_rec = FFRat::from(mod_rec);
         let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
 
-        seq!( M in 1..12 {{
+        seq!( M in 1..114 {{
             const P: u64 = paste!{ [<P M>] };
             debug!("Trying rational reconstruction over characteristic {P}");
             // next batch of sampling points
@@ -165,8 +301,8 @@ fn merge_crt<const P: u64>(
 //  x % M = d
 // has the solution x = c - (c - d) * a * N
 lazy_static! {
-    static ref BEZOUT: [Integer; 11] = {
-        let mut res: [Integer; 11] = Default::default();
+    static ref BEZOUT: [Integer; 113] = {
+        let mut res = [(); 113].map(|_| Default::default());
         let mut n = Integer::one();
         for i in 0..res.len() {
             n *= LARGE_PRIMES[i];
