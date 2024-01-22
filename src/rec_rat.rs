@@ -1,7 +1,6 @@
 use galois_fields::Z64;
 use lazy_static::lazy_static;
 use log::{debug, trace};
-use num_traits::Signed;
 use rand::Rng;
 use rug::{Integer, Rational, integer::IntegerExt64, ops::RemRounding};
 use seq_macro::seq;

@@ -4,7 +4,6 @@ use std::{
 };
 
 use galois_fields::Z64;
-use num_traits::Signed;
 use rug::{Integer, Rational, ops::NegAssign};
 use thiserror::Error;
 
