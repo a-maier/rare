@@ -1,8 +1,5 @@
-use std::iter::repeat_with;
-
 use criterion::{criterion_group, criterion_main, Criterion};
 use galois_fields::Z64;
-use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 use rare::{
     dense_poly::{DensePoly, DensePoly2},
@@ -10,54 +7,11 @@ use rare::{
     rec_linear::LinearRec,
     rec_newton::{NewtonPoly, NewtonPoly2, NewtonRec},
     rec_thiele::{ThieleRat, ThieleRec},
+    rec_rat_mod::RatRecMod,
     sparse_poly::SparsePoly,
-    traits::{Eval, One, Rec, TryEval, Zero}, rec_rat_mod::RatRecMod,
+    traits::{Eval, Rec, TryEval},
+    _test_util::{gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2}
 };
-
-fn gen_poly1<const P: u64>(n: u32, mut rng: impl Rng) -> DensePoly<Z64<P>> {
-    let max_pow = rng.gen_range(0..=n);
-    let nterms = 2usize.pow(max_pow);
-    let coeff = repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-    DensePoly::from_coeff(coeff)
-}
-
-fn gen_poly2<const P: u64>(n: u32, mut rng: impl Rng) -> DensePoly2<Z64<P>> {
-    let max_pow = rng.gen_range(0..=n);
-    let nterms = 2usize.pow(max_pow);
-    let coeff = repeat_with(|| gen_poly1(n, &mut rng))
-        .take(nterms)
-        .collect();
-    DensePoly::from_coeff(coeff)
-}
-
-fn gen_rat1<const P: u64>(n: u32, mut rng: impl Rng) -> Rat<DensePoly<Z64<P>>> {
-    let num = gen_poly1(n, &mut rng);
-    let den = if num.is_zero() {
-        One::one()
-    } else {
-        let mut den = gen_poly1(n, &mut rng).into_coeff();
-        den[0] = One::one();
-        DensePoly::from_coeff(den)
-    };
-    Rat::from_num_den_unchecked(num, den)
-}
-
-fn gen_rat2<const P: u64>(
-    n: u32,
-    mut rng: impl Rng,
-) -> Rat<DensePoly2<Z64<P>>> {
-    let num = gen_poly2(n, &mut rng);
-    let den = if num.is_zero() {
-        One::one()
-    } else {
-        let mut den: DensePoly2<_> = Zero::zero();
-        while den.is_zero() {
-            den = gen_poly2(n, &mut rng);
-        }
-        den
-    };
-    Rat::from_num_den_unchecked(num, den)
-}
 
 fn rec_poly1<const P: u64>(
     polys: &[DensePoly<Z64<P>>],
@@ -194,7 +148,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     const P: u64 = 1152921504606846883;
     let mut polys: [DensePoly<Z64<P>>; NPOLYS] = Default::default();
     for poly in &mut polys {
-        *poly = gen_poly1(N, &mut rng)
+        *poly = gen_dense_poly1(&[N], &mut rng)
     }
     c.bench_function("poly1", |b| b.iter(|| rec_poly1(&polys)));
 
@@ -204,7 +158,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut polys: [DensePoly2<Z64<P>>; NPOLYS] = Default::default();
     for poly in &mut polys {
-        *poly = gen_poly2(N / 2, &mut rng)
+        *poly = gen_dense_poly2(&[N / 2, N / 2], &mut rng)
     }
 
     c.bench_function("poly2", |b| b.iter(|| rec_poly2(&polys)));
@@ -216,7 +170,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut rats: [Rat<DensePoly<Z64<P>>>; NPOLYS] = Default::default();
     for rat in &mut rats {
-        *rat = gen_rat1(N / 2, &mut rng)
+        *rat = gen_dense_rat1(&[N / 2], &mut rng)
     }
 
     c.bench_function("rat1 thiele", |b| b.iter(|| rec_rat1(&rats)));
@@ -229,7 +183,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut rats: [Rat<DensePoly2<Z64<P>>>; NPOLYS] = Default::default();
     for rat in &mut rats {
-        *rat = gen_rat2(N / 2, &mut rng)
+        *rat = gen_dense_rat2(&[N / 2, N / 2], &mut rng)
     }
 
     c.bench_function("rat2", |b| b.iter(|| rec_rat2(&rats)));

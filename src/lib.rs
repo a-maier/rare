@@ -8,6 +8,9 @@ pub mod rec_rat_mod;
 pub mod rec_thiele;
 pub mod sparse_poly;
 pub mod traits;
+/// Utilities for tests and benchmarks
+#[doc(hidden)]
+pub mod _test_util;
 mod arr;
 pub mod rec_rat;
 mod util;

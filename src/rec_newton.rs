@@ -589,11 +589,10 @@ impl_newton_rec_recursive!(
 
 #[cfg(test)]
 mod tests {
-    use std::iter::repeat_with;
-
     use rand_xoshiro::rand_core::SeedableRng;
 
     use super::*;
+    use crate::_test_util::{gen_dense_poly1, gen_dense_poly2};
 
     fn log_init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -610,11 +609,7 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = NewtonRec::new(1);
         for _ in 0..NTESTS {
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            let coeff =
-                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-            let poly = DensePoly::from_coeff(coeff);
+            let poly = gen_dense_poly1(&[MAX_POW], &mut rng);
             eprintln!("testing {poly}");
             let reconstructed = (|x: Z64<P>| poly.eval(&x))
                 .rec_with_ran(rec, &mut rng)
@@ -636,11 +631,7 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = NewtonRec::new(1);
         for _ in 0..NTESTS {
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            let coeff =
-                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-            let poly = DensePoly::from_coeff(coeff);
+            let poly = gen_dense_poly1(&[MAX_POW], &mut rng);
             let reconstructed = (|x: Z64<P>| poly.eval(&x))
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
@@ -660,18 +651,7 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = NewtonRec::new(1);
         for _ in 0..NTESTS {
-            let mut coeffs = Vec::new();
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            for _ in 0..nterms {
-                let max_pow = rng.gen_range(0..=MAX_POW);
-                let nterms = 2usize.pow(max_pow);
-                let coeff =
-                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-                let poly = DensePoly::from_coeff(coeff);
-                coeffs.push(poly);
-            }
-            let poly = DensePoly::from_coeff(coeffs);
+            let poly = gen_dense_poly2(&[MAX_POW, MAX_POW], &mut rng);
             eprintln!("original: {poly}");
             let reconstructed =
                 (|x| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
@@ -693,18 +673,7 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = NewtonRec::new(1);
         for _ in 0..NTESTS {
-            let mut coeffs = Vec::new();
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            for _ in 0..nterms {
-                let max_pow = rng.gen_range(0..=MAX_POW);
-                let nterms = 2usize.pow(max_pow);
-                let coeff =
-                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-                let poly = DensePoly::from_coeff(coeff);
-                coeffs.push(poly);
-            }
-            let poly = DensePoly::from_coeff(coeffs);
+            let poly = gen_dense_poly2(&[MAX_POW, MAX_POW], &mut rng);
             let reconstructed =
                 (|x| poly.eval(&x)).rec_with_ran(rec, &mut rng).unwrap();
             let reconstructed: DensePoly2<Z64<P>> = reconstructed.into();

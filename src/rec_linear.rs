@@ -179,15 +179,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::iter::repeat_with;
-
     use super::*;
 
     use galois_fields::Z64;
     use rand::Rng;
     use rand_xoshiro::rand_core::SeedableRng;
 
-    use crate::traits::{Eval, One, TryEval};
+    use crate::{traits::{Eval, One, TryEval}, _test_util::gen_dense_rat1};
 
     fn log_init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -214,24 +212,7 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
         for _ in 0..NTESTS {
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            let coeff =
-                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-            let num = DensePoly::from_coeff(coeff);
-
-            let den = if num.is_zero() {
-                One::one()
-            } else {
-                let max_pow = rng.gen_range(0..=MAX_POW);
-                let nterms = 2usize.pow(max_pow);
-                let mut coeff = Vec::from_iter(
-                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms),
-                );
-                coeff[0] = One::one();
-                DensePoly::from_coeff(coeff)
-            };
-            let rat = Rat::from_num_den_unchecked(num, den);
+            let rat = gen_dense_rat1(&[MAX_POW], &mut rng);
             eprintln!("trying to reconstruct {rat}");
             let rec = LinearRec::new(
                 rat.num().len(),
@@ -258,24 +239,7 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
         for _ in 0..NTESTS {
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            let coeff =
-                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-            let num = DensePoly::from_coeff(coeff);
-
-            let den = if num.is_zero() {
-                One::one()
-            } else {
-                let max_pow = rng.gen_range(0..=MAX_POW);
-                let nterms = 2usize.pow(max_pow);
-                let mut coeff = Vec::from_iter(
-                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms),
-                );
-                coeff[0] = One::one();
-                DensePoly::from_coeff(coeff)
-            };
-            let rat = Rat::from_num_den_unchecked(num, den);
+            let rat = gen_dense_rat1(&[MAX_POW], &mut rng);
             eprintln!("trying to reconstruct {rat}");
             let start: Z64<P> = rng.gen();
             for num_known in 0..rat.num().len() {
@@ -327,24 +291,7 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
         for _ in 0..NTESTS {
-            let max_pow = rng.gen_range(0..=MAX_POW);
-            let nterms = 2usize.pow(max_pow);
-            let coeff =
-                repeat_with(|| rng.gen::<Z64<P>>()).take(nterms).collect();
-            let num = DensePoly::from_coeff(coeff);
-
-            let den = if num.is_zero() {
-                One::one()
-            } else {
-                let max_pow = rng.gen_range(0..=MAX_POW);
-                let nterms = 2usize.pow(max_pow);
-                let mut coeff = Vec::from_iter(
-                    repeat_with(|| rng.gen::<Z64<P>>()).take(nterms),
-                );
-                coeff[0] = One::one();
-                DensePoly::from_coeff(coeff)
-            };
-            let rat = Rat::from_num_den_unchecked(num, den);
+            let rat = gen_dense_rat1(&[MAX_POW], &mut rng);
             let rec = LinearRec::new(
                 rat.num().len(),
                 rat.den().len().try_into().unwrap(),
