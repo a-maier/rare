@@ -51,9 +51,7 @@ impl ThieleRec {
     {
         debug!("1d rational function reconstruction");
         let mut pts = pts.into_iter();
-        let Some((y0, a0)) = pts.next() else {
-            return None
-        };
+        let (y0, a0) = pts.next()?;
         trace!("Adding q({y0}) = {a0}");
         let mut rat = ThieleRat::from(a0);
         trace!("q(x1) = {rat}");

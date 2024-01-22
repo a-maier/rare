@@ -15,7 +15,7 @@ pub fn rec_coeff<T, const P: u64, const N: usize>(
     rat: &Rat<SparsePoly<T, N>>,
     pts: &[([Z64<P>; N], Z64<P>)],
 ) -> Option<Rat<SparsePoly<Z64<P>, N>>> {
-    assert!(rat.den().len() > 0);
+    assert!(!rat.den().is_empty());
     // Number of unknown coefficients - one of them is set to 1 to fix the normalisation
     let num_unknown = rat.num().len() + rat.den().len() - 1;
     // Need at least one equation for each coefficient in rat
@@ -29,13 +29,13 @@ pub fn rec_coeff<T, const P: u64, const N: usize>(
     let mut rhs = Vec::with_capacity(num_unknown);
     for (x, q_x) in pts {
         for term in rat.num().terms() {
-            lhs.push(eval_pow(term, &x))
+            lhs.push(eval_pow(term, x))
         }
         let (normalised, unknown) = rat.den().terms().split_first().unwrap();
         for term in unknown {
-            lhs.push(-*q_x * eval_pow(term, &x))
+            lhs.push(-*q_x * eval_pow(term, x))
         }
-        rhs.push(q_x * eval_pow(normalised, &x));
+        rhs.push(q_x * eval_pow(normalised, x));
     }
     let lhs = Matrix::from_vec(num_unknown, lhs);
     let Some(res) = gauss_solve(lhs, rhs) else {
