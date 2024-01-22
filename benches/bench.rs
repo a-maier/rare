@@ -81,9 +81,9 @@ fn rec_rat1<const P: u64>(
 ) -> Vec<ThieleRat<Z64<P>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-    let rec = ThieleRec::new(1);
 
     for poly in rats {
+        let rec = ThieleRec::new(1);
         let p = (|x: Z64<P>| poly.try_eval(&x))
             .rec_with_ran(rec, &mut rng)
             .unwrap();
@@ -97,9 +97,9 @@ fn rec_rat1_expanded<const P: u64>(
 ) -> Vec<Rat<DensePoly<Z64<P>>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-    let rec = ThieleRec::new(1);
 
     for rat in rats {
+        let rec = ThieleRec::new(1);
         let p = (|x: Z64<P>| rat.try_eval(&x))
             .rec_with_ran(rec, &mut rng)
             .unwrap();
