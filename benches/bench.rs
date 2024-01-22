@@ -1,5 +1,8 @@
+use std::iter::repeat_with;
+
 use criterion::{criterion_group, criterion_main, Criterion};
 use galois_fields::Z64;
+use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 use rare::{
     dense_poly::{DensePoly, DensePoly2},
@@ -10,7 +13,7 @@ use rare::{
     rec_rat_mod::RatRecMod,
     sparse_poly::SparsePoly,
     traits::{Eval, Rec, TryEval},
-    _test_util::{gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2}
+    _test_util::{gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2, gen_sparse_rat}, rec_linear_multivar::rec_coeff
 };
 
 fn rec_poly1<const P: u64>(
@@ -140,6 +143,30 @@ fn rec_rat2<const P: u64>(
     res
 }
 
+fn rec_rat2_linear<const P: u64>(
+    rats: &[Rat<SparsePoly<Z64<P>, 2>>],
+) -> Vec<Rat<SparsePoly<Z64<P>, 2>>> {
+    let mut res = Vec::with_capacity(rats.len());
+    let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+
+    for rat in rats {
+        let nneeded = rat.num().len() + rat.den().len() - 1;
+        let pts = Vec::from_iter(
+            repeat_with(|| {
+                let pt = [(); 2].map(|_| rng.gen());
+                if let Some(val) = rat.try_eval(&pt) {
+                    Some((pt, val))
+                } else {
+                    None
+                }
+            }).filter_map(|pt| pt)
+            .take(nneeded)
+        );
+        res.push(rec_coeff(&rat, &pts).unwrap());
+    }
+    res
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
@@ -187,6 +214,16 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
 
     c.bench_function("rat2", |b| b.iter(|| rec_rat2(&rats)));
+
+    let mut rats: [Rat<SparsePoly<Z64<P>, 2>>; NPOLYS] = Default::default();
+    for rat in &mut rats {
+        *rat = gen_sparse_rat(N / 2, N / 2, &mut rng)
+    }
+
+    c.bench_function(
+        "rat2 (known degrees)",
+        |b| b.iter(|| rec_rat2_linear(&rats))
+    );
 }
 
 criterion_group!(benches, criterion_benchmark);
