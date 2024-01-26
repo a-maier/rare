@@ -135,6 +135,10 @@ impl<const P: u64> ThieleRec<P> {
     {
         self.rec_univariate_with_ran(poly, thread_rng())
     }
+
+    pub fn rec_started(&self) -> bool {
+        self.rec_started
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
