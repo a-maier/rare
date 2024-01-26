@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use rand::{thread_rng, Rng};
 use rug::{Integer, Rational};
 

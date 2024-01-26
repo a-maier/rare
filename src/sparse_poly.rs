@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use num_traits::Pow;
 use paste::paste;
 use rug::{Integer, integer::IntegerExt64, Complete};

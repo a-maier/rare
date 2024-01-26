@@ -3,7 +3,7 @@ use std::{
     ops::ControlFlow
 };
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use log::{error, debug, trace, warn};
 use paste::paste;
 use rand::Rng;

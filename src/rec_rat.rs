@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use lazy_static::lazy_static;
 use log::{debug, trace, warn};
 use rand::Rng;

@@ -1,6 +1,6 @@
 use std::iter::repeat_with;
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use rand::Rng;
 use paste::paste;
 use seq_macro::seq;

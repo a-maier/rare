@@ -3,7 +3,7 @@ use std::{
     ops::{Mul, MulAssign, SubAssign},
 };
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use log::{debug, trace};
 use num_traits::Inv;
 
@@ -183,7 +183,7 @@ where
 mod tests {
     use super::*;
 
-    use galois_fields::Z64;
+    use ffnt::Z64;
     use rand::Rng;
     use rand_xoshiro::rand_core::SeedableRng;
 

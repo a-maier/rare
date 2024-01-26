@@ -5,7 +5,7 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use itertools::Itertools;
 use paste::paste;
 

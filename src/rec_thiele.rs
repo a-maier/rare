@@ -1,6 +1,6 @@
 use std::{fmt::{self, Display}, ops::ControlFlow};
 
-use galois_fields::{TryDiv, Z64};
+use ffnt::{TryDiv, Z64};
 use log::{debug, trace};
 use rand::{thread_rng, Rng};
 

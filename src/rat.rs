@@ -3,7 +3,7 @@ use std::{
     ops::Div,
 };
 
-use galois_fields::Z64;
+use ffnt::Z64;
 use rug::{Integer, Rational, ops::NegAssign};
 use thiserror::Error;
 

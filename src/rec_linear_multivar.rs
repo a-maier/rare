@@ -1,4 +1,4 @@
-use galois_fields::Z64;
+use ffnt::Z64;
 
 use crate::{
     matrix::Matrix,
