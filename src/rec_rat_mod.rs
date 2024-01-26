@@ -564,17 +564,17 @@ macro_rules! impl_rec_with_ran {
                                     next = rec.add_pt(z, q_z);
                                 },
                                 Continue(Needed::Pts(zs)) => {
-                                    let pts = Vec::from_iter(
-                                        zs.into_iter().map(|mut z| {
-                                            let q_z = loop {
-                                                if let Some(q_z) = (self)(z) {
-                                                    break q_z;
-                                                }
-                                                z = rec.request_next_arg(z);
-                                            };
-                                            (z, q_z)
-                                        })
+                                    let mut pts = Vec::from_iter(
+                                        zs.iter().copied()
+                                            .filter_map(|z| (self)(z).map(|q_z| (z, q_z)))
                                     );
+                                    let mut z = *zs.last().unwrap();
+                                    while pts.len() < zs.len() {
+                                        z = rec.request_next_arg(z);
+                                        if let Some(q_z) = (self)(z) {
+                                            pts.push((z, q_z))
+                                        }
+                                    }
                                     next = rec.add_pts(&pts);
                                 },
                                 Break(()) => {
