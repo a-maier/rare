@@ -1,12 +1,14 @@
+use std::ops::ControlFlow;
+
 use galois_fields::Z64;
 use lazy_static::lazy_static;
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use rand::Rng;
 use rug::{Integer, Rational, integer::IntegerExt64, ops::RemRounding};
 use seq_macro::seq;
 use paste::paste;
 
-use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::RatRecMod, arr::Arr, rec_linear_multivar::rec_coeff};
+use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::{RatRecMod, self}, arr::Arr, rec_linear_multivar::rec_coeff};
 
 const LARGE_PRIMES: [u64; 114] = [
     1152921504606846883, 1152921504606846869, 1152921504606846803,
@@ -74,6 +76,199 @@ impl RatRec {
         Self { extra_pts }
     }
 }
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum ReconstructionStatus {
+    FirstRat,
+    FirstNumPoly,
+    FirstDenPoly,
+    Rat,
+    Done,
+}
+
+impl From<rec_rat_mod::ReconstructionStatus> for ReconstructionStatus {
+    fn from(source: rec_rat_mod::ReconstructionStatus) -> Self {
+        use ReconstructionStatus::*;
+        match source {
+            rec_rat_mod::ReconstructionStatus::Rat => FirstRat,
+            rec_rat_mod::ReconstructionStatus::NumPoly => FirstNumPoly,
+            rec_rat_mod::ReconstructionStatus::DenPoly => FirstDenPoly,
+            rec_rat_mod::ReconstructionStatus::Done => Done,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum Needed<const N: usize>{
+    Pt([Z64<P0>; N]),
+    Pts(Vec<[Z64<P0>; N]>),
+    Any(usize)
+}
+
+impl<const N: usize> From<rec_rat_mod::Needed<P0, N>> for Needed<N> {
+    fn from(source: rec_rat_mod::Needed<P0, N>) -> Self {
+        use Needed::*;
+        match source {
+            rec_rat_mod::Needed::Pt(pt) => Pt(pt),
+            rec_rat_mod::Needed::Pts(pts) => Pts(pts),
+        }
+    }
+}
+
+
+seq! {N in 2..=16 {
+    paste! {
+        use crate::rec_rat_mod::[<RatRecMod N>];
+
+        #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+        pub struct [<RatRec N>] {
+            rec: [<RatRecMod N>]<P0>,
+            rat: FFRat<N>,
+            res: Result<Rat<SparsePoly<Integer, N>>, NoneError>,
+            extra_pts: usize,
+            done: bool,
+        }
+
+        impl [<RatRec N>] {
+            pub fn new(extra_pts: usize) -> Self {
+                Self::with_shift(extra_pts, [Z64::zero(); N])
+            }
+
+            pub fn with_shift(extra_pts: usize, shift: [Z64<P0>; N]) -> Self {
+                Self {
+                    rec: [<RatRecMod N>]::with_shift(extra_pts, shift),
+                    rat: Default::default(),
+                    res: Err(NoneError {  }),
+                    extra_pts,
+                    done: false,
+                }
+            }
+
+            pub fn add_pt(&mut self, z: [Z64<P0>; N], q_z: Z64<P0>) -> ControlFlow<(), Needed<N>> {
+                use ControlFlow::*;
+                use ReconstructionStatus::*;
+                match self.status() {
+                    FirstRat | FirstNumPoly | FirstDenPoly => match self.rec.add_pt(z, q_z) {
+                        Continue(needed) => Continue(needed.into()),
+                        Break(()) => {
+                            self.finish_first_mod_rec();
+                            self.ask_for_new_mod()
+                        }
+                    },
+                    Rat => {
+                        warn!("Passed single point when a slice of points was requested");
+                        self.ask_for_new_mod()
+                    },
+                    Done => Break(()),
+                }
+            }
+
+            pub fn add_pts<'a, const P: u64>(
+                &mut self,
+                pts: &'a [([Z64<P>; N], Z64<P>)],
+            ) -> ControlFlow<(), Needed<N>> {
+                use ControlFlow::*;
+                use ReconstructionStatus::*;
+                match self.status() {
+                    FirstRat | FirstNumPoly | FirstDenPoly => {
+                        if P != P0 {
+                            todo!("request points in correct characteristic")
+                        }
+                        // cast to the correct type
+                        // SAFETY: we just checked that the type is actually &'a [([Z64<P0>; N], Z64<P0>)]
+                        //         the lifetime is explicitly set to match the original one
+                        let pts: &'a [_] = unsafe {
+                            std::slice::from_raw_parts(pts.as_ptr() as _, pts.len())
+                        };
+                        let res = match self.rec.add_pts(pts) {
+                            Continue(needed) => Continue(needed.into()),
+                            Break(()) => {
+                                self.finish_first_mod_rec();
+                                self.ask_for_new_mod()
+                            }
+                        };
+                        return res;
+                    },
+                    Rat => self.rec_rat_mod_from_pts(pts),
+                    Done => Break(()),
+                }
+            }
+
+            pub fn rec_rat_mod_from_pts<const P: u64>(
+                &mut self,
+                pts: &[([Z64<P>; N], Z64<P>)],
+            ) -> ControlFlow<(), Needed<N>> {
+                // if we can already reproduce the points we are done
+                if let Ok(res) = self.res.as_ref() {
+                    if pts.len() >= self.extra_pts {
+                        let sample_same = pts.iter()
+                            .all(|(pt, val)| res.try_eval(pt) == Some(*val));
+
+                        if sample_same {
+                            self.done = true;
+                            return ControlFlow::Break(());
+                        }
+                    }
+                }
+
+                let Some(next_mod_rec) = rec_coeff(&self.rat.rat, &pts) else {
+                    return self.ask_for_new_mod();
+                };
+                let mod_rec = std::mem::take(&mut self.rat);
+                self.rat = combine_crt_rat(mod_rec, next_mod_rec);
+                self.res  = (&self.rat).try_into();
+                self.ask_for_new_mod()
+            }
+
+            pub fn status(&self) -> ReconstructionStatus {
+                use ReconstructionStatus::{Rat, Done};
+                if self.rat.modulus.is_zero() {
+                    // still reconstructing in first characteristic
+                    let status = ReconstructionStatus::from(self.rec.status());
+                    assert_ne!(status, Done);
+                    status
+                } else if self.done {
+                    Done
+                } else {
+                    Rat
+                }
+            }
+
+            fn finish_first_mod_rec(&mut self) {
+                debug_assert_eq!(self.rec.status(), rec_rat_mod::ReconstructionStatus::Done);
+                let rec = std::mem::replace(&mut self.rec, [<RatRecMod N>]::new(0));
+                self.rat = FFRat::from(rec.into_rat());
+                debug!("Finished reconstruction modulo {P0}: {}", self.rat.rat);
+                self.res = (&self.rat).try_into();
+                if let Ok(rat) = self.res.as_ref() {
+                    if rat.is_zero() {
+                        self.done = true;
+                    }
+                }
+            }
+
+            fn ask_for_new_mod(&self) -> ControlFlow<(), Needed<N>> {
+                let ncoeff = self.rat.rat.num().len() + self.rat.rat.den().len() - 1;
+                if ncoeff == 0 {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(Needed::Any(ncoeff))
+                }
+            }
+
+            pub fn request_next_arg(
+                &self,
+                bad_z: [Z64<P0>; N]
+            ) -> [Z64<P0>; N] {
+                self.rec.request_next_arg(bad_z)
+            }
+
+            pub fn into_rat(self) -> Option<Rat<SparsePoly<Integer, N>>> {
+                self.res.ok()
+            }
+        }
+    }
+}}
 
 impl<F, const N: usize> Rec<RatRec, [Integer; N]> for F
 where
@@ -434,6 +629,8 @@ mod tests {
     use ::rand::SeedableRng;
     use rug::integer::Order;
 
+    use crate::rec_rat_mod::find_shift;
+
     use super::*;
 
     const NTESTS: usize = 100;
@@ -494,6 +691,88 @@ mod tests {
                         RatRec::new(1),
                         &mut rat_rng
                     ).unwrap();
+
+                    for _ in 0..EXTRA_SAMPLES {
+                        let n = [(); NVARS].map(|_| rand_int(&mut rng));
+                        let orig_val = orig.try_eval(&n);
+                        let rec_val = rec.try_eval(&n);
+                        assert!((orig_val == rec_val) || orig_val.is_none())
+                    }
+                }
+            }
+        }
+    });
+
+    seq!(NVARS in 2..=3 {
+        paste! {
+            #[test]
+            fn [<rec_rat_explicit_ NVARS>]() {
+                log_init();
+
+                let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+                for _ in 0..NTESTS {
+
+                    let orig = rand_rat::<NVARS>(&mut rng);
+                    eprintln!("trying to reconstruct {orig}");
+                    let shift = find_shift(|z| orig.try_eval(&z), &mut rng);
+                    let mut rec = [<RatRec NVARS>]::with_shift(1, shift);
+                    let (z, q_z) = loop {
+                        let z: [Z64<P0>; NVARS] = [(); NVARS].map(|_| rng.gen());
+                        if let Some(q_z) = orig.try_eval(&z) {
+                            break (z, q_z);
+                        }
+                    };
+                    let mut next = rec.add_pt(z, q_z);
+                    loop {
+                        use ControlFlow::*;
+                        use Needed::*;
+                        match next {
+                            Continue(Pt(mut z)) => {
+                                let q_z = loop {
+                                    if let Some(q_z) = orig.try_eval(&z) {
+                                        break q_z;
+                                    }
+                                    z = rec.request_next_arg(z);
+                                };
+                                next = rec.add_pt(z, q_z);
+                            },
+                            Continue(Pts(zs)) => {
+                                let mut pts = Vec::from_iter(
+                                    zs.iter().copied()
+                                        .filter_map(|z| orig.try_eval(&z).map(|q_z| (z, q_z)))
+                                );
+                                let mut z = *zs.last().unwrap();
+                                while pts.len() < zs.len() {
+                                    z = rec.request_next_arg(z);
+                                    if let Some(q_z) = orig.try_eval(&z) {
+                                        pts.push((z, q_z))
+                                    }
+                                }
+                                next = rec.add_pts(&pts);
+                            },
+                            Continue(Any(n)) => {
+                                seq!{ N in 1..10 {{
+                                    const P: u64 = LARGE_PRIMES[N];
+                                    let pts = Vec::from_iter(
+                                        std::iter::repeat_with(|| {
+                                            let z: [Z64<P>; NVARS] = [(); NVARS].map(|_| rng.gen());
+                                            orig.try_eval(&z).map(|q_z| (z, q_z))
+                                        })
+                                            .flatten()
+                                            .take(n)
+                                    );
+                                    let next = rec.add_pts(&pts);
+                                    if next == Break(()) {
+                                        break;
+                                    }
+                                    assert_eq!(next, Continue(Any(n)))
+                                }}}
+
+                            }
+                            Break(()) => break,
+                        }
+                    }
+                    let rec = rec.into_rat().unwrap();
 
                     for _ in 0..EXTRA_SAMPLES {
                         let n = [(); NVARS].map(|_| rand_int(&mut rng));
