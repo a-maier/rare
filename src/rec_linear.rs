@@ -187,7 +187,7 @@ mod tests {
     use rand::Rng;
     use rand_xoshiro::rand_core::SeedableRng;
 
-    use crate::{traits::{Eval, One, TryEval}, _test_util::gen_dense_rat1};
+    use crate::{traits::{Eval, One, TryEval}, _test_util::{gen_dense_rat1, sample_eq}};
 
     fn log_init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -226,7 +226,7 @@ mod tests {
             eprintln!("{reconstructed}");
             let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();
             eprintln!("{reconstructed}");
-            assert_eq!(rat, reconstructed)
+            assert!(sample_eq(&rat, &reconstructed, &mut rng))
         }
     }
 
@@ -241,7 +241,10 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
         for _ in 0..NTESTS {
-            let rat = gen_dense_rat1(&[MAX_POW], &mut rng);
+            let (num, den) = gen_dense_rat1(&[MAX_POW], &mut rng).into_num_den();
+            let mut den = den.into_coeff();
+            den[0] = One::one();
+            let rat = Rat::from_num_den_unchecked(num, DensePoly::from_coeff(den));
             eprintln!("trying to reconstruct {rat}");
             let start: Z64<P> = rng.gen();
             for num_known in 0..rat.num().len() {
@@ -302,7 +305,7 @@ mod tests {
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
             let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();
-            assert_eq!(rat, reconstructed)
+            assert!(sample_eq(&rat, &reconstructed, &mut rng))
         }
     }
 }

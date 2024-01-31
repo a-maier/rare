@@ -1,11 +1,11 @@
 use std::iter::repeat_with;
 
 use ffnt::Z64;
-use rand::Rng;
+use rand::{Rng, distributions::Standard, prelude::Distribution};
 use paste::paste;
 use seq_macro::seq;
 
-use crate::{dense_poly::{DensePoly, DensePoly1}, rat::Rat, traits::{One, Zero}, sparse_poly::{SparsePoly, SparseMono}};
+use crate::{dense_poly::{DensePoly, DensePoly1}, rat::Rat, traits::{One, Zero, TryEval}, sparse_poly::{SparsePoly, SparseMono}};
 
 // generate a random dense polynomial
 // the maximum power is 2^m - 1, where m is sampled uniformly between 0 and `n[0]`
@@ -55,10 +55,14 @@ seq!( N in 1..=10 {
             let den = if num.is_zero() {
                 One::one()
             } else {
-                let mut den = [<gen_dense_poly N>](n, &mut rng).into_coeff();
-                den[0] = One::one();
-                DensePoly::from_coeff(den)
+                loop {
+                    let den = [<gen_dense_poly N>](n, &mut rng);
+                    if !den.is_zero() {
+                        break den;
+                    }
+                }
             };
+
             Rat::from_num_den_unchecked(num, den)
         }
     }
@@ -97,14 +101,29 @@ pub fn gen_sparse_rat<const P: u64, const N: usize>(
     let den = if num.is_zero() {
         One::one()
     } else {
-        let mut den: SparsePoly<_, N> = Zero::zero();
-        while den.is_zero() {
-            den = gen_sparse_poly(n, max_pow, &mut rng);
+        loop {
+            let den = gen_sparse_poly(n, max_pow, &mut rng);
+            if !den.is_zero() {
+                break den;
+            }
         }
-        // normalise
-        let mut terms = den.into_terms();
-        terms[0].coeff = One::one();
-        SparsePoly::from_raw_terms(terms)
     };
     Rat::from_num_den_unchecked(num, den)
+}
+
+pub fn sample_eq<const N: usize, const P: u64>(
+    orig: &impl TryEval<[Z64<P>; N], Output = Z64<P>>,
+    rec: &impl TryEval<[Z64<P>; N], Output = Z64<P>>,
+    mut rng: impl Rng,
+) -> bool
+where Standard: Distribution<[Z64<P>; N]>
+{
+    const TESTS: usize = 10;
+    for _ in 0..TESTS {
+        let pt: [Z64<P>; N] = rng.gen();
+        if orig.try_eval(&pt) != rec.try_eval(&pt) {
+            return false;
+        }
+    }
+    true
 }

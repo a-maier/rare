@@ -214,6 +214,8 @@ seq! {N in 2..=16 {
                 let Some(next_mod_rec) = rec_coeff(&self.rat.rat, &pts) else {
                     return self.ask_for_new_mod();
                 };
+                let next_mod_rec = normalise_coeff(next_mod_rec);
+                debug!("Finished reconstruction modulo {P}: {next_mod_rec}");
                 let mod_rec = std::mem::take(&mut self.rat);
                 self.rat = combine_crt_rat(mod_rec, next_mod_rec);
                 self.res  = (&self.rat).try_into();
@@ -237,7 +239,8 @@ seq! {N in 2..=16 {
             fn finish_first_mod_rec(&mut self) {
                 debug_assert_eq!(self.rec.status(), rec_rat_mod::ReconstructionStatus::Done);
                 let rec = std::mem::replace(&mut self.rec, [<RatRecMod N>]::new(0));
-                self.rat = FFRat::from(rec.into_rat());
+                let rec = normalise_coeff(rec.into_rat());
+                self.rat = FFRat::from(rec);
                 debug!("Finished reconstruction modulo {P0}: {}", self.rat.rat);
                 self.res = (&self.rat).try_into();
                 if let Ok(rat) = self.res.as_ref() {
@@ -401,7 +404,8 @@ where
             self, rec_mod, &mut rng
         )?;
         let ncoeff = mod_rec.num().len() + mod_rec.den().len() - 1;
-        debug!("Reconstructed rational function has {ncoeff} unknown coefficients");
+        let mod_rec = normalise_coeff(mod_rec);
+        debug!("Reconstructed {mod_rec}");
         let mut mod_rec = FFRat::from(mod_rec);
         let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
 
@@ -427,6 +431,8 @@ where
             }
 
             let next_mod_rec = rec_coeff(&mod_rec.rat, &pts)?;
+            let next_mod_rec = normalise_coeff(next_mod_rec);
+            debug!("Reconstructed {next_mod_rec}");
             mod_rec = combine_crt_rat(mod_rec, next_mod_rec);
             res  = (&mod_rec).try_into();
         }});
@@ -435,6 +441,19 @@ where
         trace!("Final value: {res:?}");
         None
     }
+}
+
+fn normalise_coeff<const P: u64, const N: usize>(
+    rat: Rat<SparsePoly<Z64<P>, N>>
+) -> Rat<SparsePoly<Z64<P>, N>> {
+    let Some(term) = rat.num().terms().last() else {
+        return Zero::zero()
+    };
+    let norm = term.coeff.inv();
+    let (mut num, mut den) = rat.into_num_den();
+    num *= norm;
+    den *= norm;
+    Rat::from_num_den_unchecked(num, den)
 }
 
 fn combine_crt_rat<const P: u64, const N: usize>(
@@ -448,13 +467,11 @@ fn combine_crt_rat<const P: u64, const N: usize>(
     debug_assert_eq!(den.len(), new_den.len());
     let mut num = num.into_terms();
     let mut den = den.into_terms();
-    debug_assert!(den[0].coeff.is_one());
     let new_num = new_num.into_terms();
     let new_den = new_den.into_terms();
-    debug_assert!(new_den[0].coeff.is_one());
 
-    let terms = num.iter_mut().chain(den.iter_mut().skip(1));
-    let new_terms = new_num.into_iter().chain(new_den.into_iter().skip(1));
+    let terms = num.iter_mut().chain(den.iter_mut());
+    let new_terms = new_num.into_iter().chain(new_den.into_iter());
     for (term, new_term) in terms.zip(new_terms) {
         debug_assert_eq!(term.powers, new_term.powers);
         merge_crt(&mut term.coeff, new_term.coeff, &modulus);
@@ -540,10 +557,8 @@ impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<SparsePoly<Rational, N>> 
         }
         let num = SparsePoly::from_raw_terms(num);
 
-        debug_assert!(source.rat.den().term(0).coeff.is_one());
         let mut den = Vec::with_capacity(source.rat.den().len());
-        den.push(SparseMono::new(One::one(), source.rat.den().term(0).powers));
-        for term in source.rat.den().terms().iter().skip(1) {
+        for term in source.rat.den().terms().iter() {
             let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus).ok_or(NoneError{})?;
             den.push(SparseMono::new(rat_coeff, term.powers));
         }
@@ -566,7 +581,8 @@ impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<SparsePoly<Integer, N>> {
 fn rat_reconstruct(coeff: &Integer, modulus: &Integer) -> Option<Rational> {
     // TODO: code duplication
     let max_bound = Integer::from(modulus / 2);
-    let max_den = Integer::from_f64(max_bound.to_f64().powf(1. / 4.)).unwrap();
+    // TODO: make configurable
+    let max_den = Integer::from(max_bound.root_64_ref(5));
     wang_reconstruct(coeff.to_owned(), modulus.to_owned(), &(max_bound / &max_den), &max_den)
 }
 
@@ -691,6 +707,7 @@ mod tests {
                         RatRec::new(1),
                         &mut rat_rng
                     ).unwrap();
+                    eprintln!("reconstructed {rec}");
 
                     for _ in 0..EXTRA_SAMPLES {
                         let n = [(); NVARS].map(|_| rand_int(&mut rng));
@@ -751,7 +768,7 @@ mod tests {
                                 next = rec.add_pts(&pts);
                             },
                             Continue(Any(n)) => {
-                                seq!{ N in 1..10 {{
+                                seq!{ N in 1..20 {{
                                     const P: u64 = LARGE_PRIMES[N];
                                     let pts = Vec::from_iter(
                                         std::iter::repeat_with(|| {
@@ -767,17 +784,20 @@ mod tests {
                                     }
                                     assert_eq!(next, Continue(Any(n)))
                                 }}}
-
+                                panic!("Need more than 20 characteristics!");
                             }
                             Break(()) => break,
                         }
                     }
                     let rec = rec.into_rat().unwrap();
+                    eprintln!("reconstructed {rec}");
 
                     for _ in 0..EXTRA_SAMPLES {
                         let n = [(); NVARS].map(|_| rand_int(&mut rng));
+                        debug!("check at x = {n:?}");
                         let orig_val = orig.try_eval(&n);
                         let rec_val = rec.try_eval(&n);
+                        debug!("{orig_val:?} == {rec_val:?}");
                         assert!((orig_val == rec_val) || orig_val.is_none())
                     }
                 }

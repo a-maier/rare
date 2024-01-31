@@ -74,7 +74,7 @@ fn eval_pow<T, const P: u64, const N: usize>(
 mod tests {
     use rand::{SeedableRng, Rng};
 
-    use crate::{_test_util::gen_sparse_rat, traits::TryEval};
+    use crate::{_test_util::{gen_sparse_rat, sample_eq}, traits::TryEval};
 
     use super::*;
 
@@ -112,7 +112,7 @@ mod tests {
             let nneeded = rat.num().len() + rat.den().len() - 1;
             let pts = gen_pts(&rat, nneeded, &mut rng);
             let rec = rec_coeff(&rat, &pts).unwrap();
-            assert_eq!(rat, rec);
+            assert!(sample_eq(&rat, &rec, &mut rng));
         }
     }
 
@@ -137,7 +137,7 @@ mod tests {
         let pts = gen_pts(&rat, nneeded, &mut rng);
         let res = rec_coeff(&rat, &pts).unwrap();
         eprintln!("reconstructed {res}");
-        assert_eq!(res, rat);
+        assert!(sample_eq(&rat, &res, &mut rng));
 
         // 1 / y^2
         let num = SparsePoly::<Z64<P>, 2>::one();
@@ -148,7 +148,7 @@ mod tests {
         let pts = gen_pts(&rat, nneeded, &mut rng);
         let res = rec_coeff(&rat, &pts).unwrap();
         eprintln!("reconstructed {res}");
-        assert_eq!(res, rat);
+        assert!(sample_eq(&rat, &res, &mut rng));
 
         // 1 / x
         let num = SparsePoly::<Z64<P>, 2>::one();
@@ -159,7 +159,7 @@ mod tests {
         let pts = gen_pts(&rat, nneeded, &mut rng);
         let res = rec_coeff(&rat, &pts).unwrap();
         eprintln!("reconstructed {res}");
-        assert_eq!(res, rat);
+        assert!(sample_eq(&rat, &res, &mut rng));
     }
 
 

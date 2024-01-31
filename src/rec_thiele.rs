@@ -313,7 +313,7 @@ where
 mod tests {
     use rand_xoshiro::rand_core::SeedableRng;
 
-    use crate::{dense_poly::DensePoly, traits::TryEval, _test_util::gen_dense_rat1};
+    use crate::{dense_poly::DensePoly, traits::TryEval, _test_util::{gen_dense_rat1, sample_eq}};
 
     use super::*;
 
@@ -341,7 +341,7 @@ mod tests {
             eprintln!("{reconstructed}");
             let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();
             eprintln!("{reconstructed}");
-            assert_eq!(rat, reconstructed)
+            assert!(sample_eq(&rat, &reconstructed, &mut rng))
         }
     }
 
@@ -362,7 +362,7 @@ mod tests {
                 .rec_with_ran(rec, &mut rng)
                 .unwrap();
             let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();
-            assert_eq!(rat, reconstructed)
+            assert!(sample_eq(&rat, &reconstructed, &mut rng))
         }
     }
 }

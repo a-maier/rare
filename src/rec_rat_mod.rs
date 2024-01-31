@@ -452,11 +452,7 @@ macro_rules! impl_rat_rec_mod_recursive {
                         if self.status() != ReconstructionStatus::Done {
                             warn!("Taking out rational function before reconstruction is finished");
                         }
-                        let Self{mut num, mut den, ..} = self;
-                        // fix normalisation
-                        let norm = den.term(0).coeff.inv();
-                        num *= &norm;
-                        den *= &norm;
+                        let Self{num, den, ..} = self;
                         Rat::from_num_den_unchecked(num, den)
                     }
 
@@ -725,7 +721,7 @@ mod tests {
             let res =
                 (|z| rat.try_eval(&z)).rec_with_ran(rec, &mut rng).unwrap();
             eprintln!("reconstructed {res}");
-            assert_eq!(rat, res);
+            assert!(sample_eq(&rat, &res, &mut rng));
         }
     }
 
@@ -750,7 +746,7 @@ mod tests {
             .rec_with_ran(rec, &mut rng)
             .unwrap();
         eprintln!("reconstructed {res}");
-        assert_eq!(res, rat);
+        assert!(sample_eq(&rat, &res, &mut rng));
 
         // 1 / y^2
         let num = SparsePoly::<Z64<P>, 2>::one();
@@ -761,7 +757,7 @@ mod tests {
             .rec_with_ran(rec, &mut rng)
             .unwrap();
         eprintln!("reconstructed {res}");
-        assert_eq!(res, rat);
+        assert!(sample_eq(&rat, &res, &mut rng));
 
         // 1 / x
         let num = SparsePoly::<Z64<P>, 2>::one();
@@ -772,7 +768,7 @@ mod tests {
             .rec_with_ran(rec, &mut rng)
             .unwrap();
         eprintln!("reconstructed {res}");
-        assert_eq!(res, rat);
+        assert!(sample_eq(&rat, &res, &mut rng));
     }
 
     #[test]
@@ -802,9 +798,9 @@ mod tests {
             })
             .take(nterms)
             .collect();
-            let mut num = SparsePoly::from_terms(coeff);
+            let num = SparsePoly::from_terms(coeff);
 
-            let mut den = if num.is_zero() {
+            let den = if num.is_zero() {
                 One::one()
             } else {
                 let mut den: SparsePoly<_, 2> = Zero::zero();
@@ -821,12 +817,6 @@ mod tests {
                 }
                 den
             };
-
-            // normalise
-            let norm = den.term(0).coeff.inv();
-            num *= norm;
-            den *= norm;
-
             let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
 
@@ -864,9 +854,9 @@ mod tests {
             })
             .take(nterms)
             .collect();
-            let mut num = SparsePoly::from_terms(coeff);
+            let num = SparsePoly::from_terms(coeff);
 
-            let mut den = if num.is_zero() {
+            let den = if num.is_zero() {
                 One::one()
             } else {
                 let mut den: SparsePoly<_, 3> = Zero::zero();
@@ -883,11 +873,6 @@ mod tests {
                 }
                 den
             };
-
-            // normalise
-            let norm = den.term(0).coeff.inv();
-            num *= norm;
-            den *= norm;
 
             let rat = Rat::from_num_den_unchecked(num, den);
             eprintln!("trying to reconstruct {rat}");
