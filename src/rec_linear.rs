@@ -45,31 +45,19 @@ impl LinearRec {
     where
         I: IntoIterator<Item = (Z64<P>, Z64<P>)>,
     {
-        if self.num_len == 0 {
-            return Some(Zero::zero());
-        }
-        self.rec_from_seq_with_subtr(
-            pts.into_iter().map(|(x, q_x)| (x, q_x, Z64::zero())),
-        )
-    }
-
-    pub(crate) fn rec_from_seq_with_subtr<I, const P: u64>(
-        &self,
-        pts: I,
-    ) -> Option<Rat<DensePoly<Z64<P>>>>
-    where
-        I: IntoIterator<Item = (Z64<P>, Z64<P>, Z64<P>)>,
-    {
         debug!(
             "1d rational function reconstruction with known degrees {}/{}",
             self.num_len as i64 - 1,
             usize::from(self.den_len) - 1
         );
+        if self.num_len == 0 {
+            return Some(Zero::zero());
+        }
         let ncoeffs = self.num_len + usize::from(self.den_len) - 1;
         let mut eqs = Vec::with_capacity(ncoeffs * ncoeffs);
         let mut rhs = Vec::with_capacity(ncoeffs);
-        for (x, q_x, sub) in pts.into_iter().take(ncoeffs) {
-            rhs.push(q_x - sub);
+        for (x, q_x) in pts.into_iter().take(ncoeffs) {
+            rhs.push(q_x);
             let mut x_to_i = One::one();
             for _ in 0..self.num_len {
                 eqs.push(x_to_i);
@@ -184,10 +172,9 @@ mod tests {
     use super::*;
 
     use ffnt::Z64;
-    use rand::Rng;
     use rand_xoshiro::rand_core::SeedableRng;
 
-    use crate::{traits::{Eval, One, TryEval}, _test_util::{gen_dense_rat1, sample_eq}};
+    use crate::{traits::{One, TryEval}, _test_util::{gen_dense_rat1, sample_eq}};
 
     fn log_init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -227,61 +214,6 @@ mod tests {
             let reconstructed: Rat<DensePoly<Z64<P>>> = reconstructed.into();
             eprintln!("{reconstructed}");
             assert!(sample_eq(&rat, &reconstructed, &mut rng))
-        }
-    }
-
-    #[test]
-    fn rec_rat_with_subtr() {
-        log_init();
-
-        const NTESTS: u32 = 100;
-        const MAX_POW: u32 = 1;
-        const P: u64 = 67;
-
-        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
-
-        for _ in 0..NTESTS {
-            let (num, den) = gen_dense_rat1(&[MAX_POW], &mut rng).into_num_den();
-            let mut den = den.into_coeff();
-            den[0] = One::one();
-            let rat = Rat::from_num_den_unchecked(num, DensePoly::from_coeff(den));
-            eprintln!("trying to reconstruct {rat}");
-            let start: Z64<P> = rng.gen();
-            for num_known in 0..rat.num().len() {
-                for den_known in 0..rat.den().len() {
-                    let rec = LinearRec::new(
-                        rat.num().len() - num_known,
-                        (rat.den().len() - den_known).try_into().unwrap(),
-                    );
-                    let mut num_subtr = rat.num().to_owned().into_coeff();
-                    let first_known = num_subtr.len() - num_known;
-                    num_subtr[0..first_known].fill(Z64::zero());
-                    let num_subtr = DensePoly::from_coeff(num_subtr);
-                    let mut den_subtr = rat.den().to_owned().into_coeff();
-                    let first_known = den_subtr.len() - den_known;
-                    den_subtr[0..first_known].fill(Z64::zero());
-                    let den_subtr = DensePoly::from_coeff(den_subtr);
-                    let reconstructed = rec
-                        .rec_from_seq_with_subtr((0..P).filter_map(|o| {
-                            let x = start + unsafe { Z64::new_unchecked(o) };
-                            rat.try_eval(&x).map(|q_x| {
-                                let sub = num_subtr.eval(&x)
-                                    - q_x * den_subtr.eval(&x);
-                                (x, q_x, sub)
-                            })
-                        }))
-                        .unwrap();
-                    eprintln!(
-                        "reconstructed after subtractions {reconstructed}"
-                    );
-                    let (mut num, mut den) = reconstructed.into_num_den();
-                    num += num_subtr;
-                    den += den_subtr;
-                    let reconstructed = Rat::from_num_den_unchecked(num, den);
-                    eprintln!("final reconstructed: {reconstructed}");
-                    assert_eq!(rat, reconstructed)
-                }
-            }
         }
     }
 
