@@ -183,10 +183,10 @@ impl<const P: u64> From<&ThieleRat<Z64<P>>> for Rat<DensePoly<Z64<P>>> {
             let xmy = DensePoly::from_coeff_unchecked(vec![-*y, One::one()]);
             (res_num, res_den) = (&res_num * a + xmy * res_den, res_num);
         }
-        let norm = res_den
+        let norm = res_num
             .coeffs()
             .iter()
-            .find(|c| !c.is_zero())
+            .rfind(|c| !c.is_zero())
             .unwrap()
             .inv();
         res_num *= &norm;

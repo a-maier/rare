@@ -67,6 +67,18 @@ macro_rules! impl_rat_rec_mod_recursive {
                 use crate::dense_poly::[<DensePoly $n_minus_one>];
 
                 /// Rational function reconstruction of $n variables over finite field with characteristic `P'
+                // Note that the _internal_ normalisation convention
+                // is different from all other parts of the code: the
+                // coefficient of the *lowest-degree* term in the
+                // *denominator* is set to one.
+                // The rationale is that we can only fix the normalisation
+                // for coefficients that don't depend on any of the variables
+                // x0, x1, etc. With the current implementation of
+                // shifts we can only guarantee that for the
+                // lowest-degree term in the denominator.
+                // The returned rational function follows the usual
+                // convention that the highest-degree term in the
+                // numerator is normalised to one.
                 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
                 pub struct [<RatRecMod $n>]<const P: u64> {
                     extra_pts: usize,
@@ -186,6 +198,8 @@ macro_rules! impl_rat_rec_mod_recursive {
                                 let rat_in_t: Rat<_> = std::mem::take(&mut self.rat_in_t_rec)
                                     .into_rat()
                                     .into();
+                                let rat_in_t = normalise_lowest_den_coeff_to_one(rat_in_t);
+
                                 debug!("From Thiele reconstruction: {}", rat_in_t.with_vars(&["t"]));
                                 debug_assert!(!rat_in_t.den().coeff(0).is_zero());
                                 if rat_in_t.is_zero() {
@@ -351,6 +365,7 @@ macro_rules! impl_rat_rec_mod_recursive {
                             warn!("Reconstruction of rational function failed! Trying again.");
                             return self.ask_for_new_rat_pt()
                         };
+                        let rat = normalise_lowest_den_coeff_to_one(rat);
                         trace!("Reconstructed {}", rat.with_vars(&["t"]));
 
                         let coeff_val = if self.status() == NumPoly {
@@ -452,7 +467,13 @@ macro_rules! impl_rat_rec_mod_recursive {
                         if self.status() != ReconstructionStatus::Done {
                             warn!("Taking out rational function before reconstruction is finished");
                         }
-                        let Self{num, den, ..} = self;
+                        let Self{mut num, mut den, ..} = self;
+                        let Some(last) = num.terms().last() else {
+                            return Zero::zero();
+                        };
+                        let norm = last.coeff.inv();
+                        num *= norm;
+                        den *= norm;
                         Rat::from_num_den_unchecked(num, den)
                     }
 
@@ -467,6 +488,16 @@ macro_rules! impl_rat_rec_mod_recursive {
 }
 
 impl_rat_rec_mod_recursive! {16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1}
+
+fn normalise_lowest_den_coeff_to_one<const P: u64>(
+    rat: Rat<DensePoly<Z64<P>>>
+) -> Rat<DensePoly<Z64<P>>> {
+    let (mut num, mut den) = rat.into_num_den();
+    let norm = den.coeff(0).inv();
+    num *= &norm;
+    den *= &norm;
+    Rat::from_num_den_unchecked(num, den)
+}
 
 // transform from [x0, x1, ..., t] to
 // [z0, z1, z2, ...] = [t*x0 + s0, t*x1 + s1, t*x2 + s2, ..., t + sM]
