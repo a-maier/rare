@@ -1,11 +1,8 @@
-use std::{
-    num::NonZeroUsize,
-    ops::{Mul, MulAssign, SubAssign},
-};
+// TODO: combine with rec_linear_multivar.rs
+use std::num::NonZeroUsize;
 
 use ffnt::Z64;
 use log::{debug, trace};
-use num_traits::Inv;
 
 use crate::{
     dense_poly::DensePoly,
@@ -55,32 +52,37 @@ impl LinearRec {
         }
         let ncoeffs = self.num_len + usize::from(self.den_len) - 1;
         let mut eqs = Vec::with_capacity(ncoeffs * ncoeffs);
-        let mut rhs = Vec::with_capacity(ncoeffs);
         for (x, q_x) in pts.into_iter().take(ncoeffs) {
-            rhs.push(q_x);
+            let mut den_coeff = -q_x;
+            for _ in 0..usize::from(self.den_len) {
+                eqs.push(den_coeff);
+                den_coeff *= x;
+            }
             let mut x_to_i = One::one();
             for _ in 0..self.num_len {
                 eqs.push(x_to_i);
                 x_to_i *= x;
             }
-            let mut den_coeff = -q_x * x;
-            for _ in 1..usize::from(self.den_len) {
-                eqs.push(den_coeff);
-                den_coeff *= x;
+        }
+        let mut eqs = Matrix::from_vec(ncoeffs, eqs);
+        trace!("Solving system\n{eqs}");
+        eqs.row_reduce();
+        let mut den_coeffs = Vec::with_capacity(usize::from(self.den_len));
+        let mut num_coeffs = Vec::with_capacity(self.num_len);
+        for (i, row) in eqs.rows().enumerate() {
+            if !row[i].is_one() || row[(i+1)..(eqs.ncols() - 1)].iter().any(|z| !z.is_zero()){
+                return None;
+            }
+            let coeff = -*row.last().unwrap();
+            if i < usize::from(self.den_len) {
+                den_coeffs.push(coeff);
+            } else {
+                num_coeffs.push(coeff);
             }
         }
-        if rhs.len() < ncoeffs {
-            return None;
-        }
-        let eqs = Matrix::from_vec(ncoeffs, eqs);
-        trace!("Solving system\n{eqs} == {rhs:?}");
-        let mut coeffs = gauss_solve(eqs, rhs)?;
-        let mut den_coeffs = Vec::with_capacity(usize::from(self.den_len));
-        den_coeffs.push(One::one());
-        den_coeffs.extend_from_slice(&coeffs[self.num_len..]);
+        num_coeffs.push(Z64::one());
+        let num = DensePoly::from_coeff(num_coeffs);
         let den = DensePoly::from_coeff(den_coeffs);
-        coeffs.truncate(self.num_len);
-        let num = DensePoly::from_coeff(coeffs);
         Some(Rat::from_num_den_unchecked(num, den))
     }
 }
@@ -117,56 +119,6 @@ where
     }
 }
 
-// TODO: put rhs inside the matrix?
-pub(crate) fn gauss_solve<T>(mut eqs: Matrix<T>, mut rhs: Vec<T>) -> Option<Vec<T>>
-where
-    T: Copy
-        + Zero
-        + One
-        + Inv<Output = T>
-        + MulAssign
-        + Mul<Output = T>
-        + SubAssign,
-{
-    debug_assert_eq!(eqs.nrows(), rhs.len());
-    // forward substitution
-    for nrow in 0..eqs.nrows() {
-        if eqs[(nrow, nrow)].is_zero() {
-            let pivot = ((nrow + 1)..eqs.nrows())
-                .find(|&n| !eqs[(n, nrow)].is_zero())?;
-            // TODO: don't we also need to swap the rhs?
-            eqs.swap_rows(nrow, pivot);
-        }
-        debug_assert!(!eqs[(nrow, nrow)].is_zero());
-        let pivot = std::mem::replace(&mut eqs[(nrow, nrow)], One::one());
-        let inv_pivot = pivot.inv();
-        let pivot_row = eqs.row_mut(nrow);
-        for e in &mut pivot_row[nrow + 1..] {
-            *e *= inv_pivot;
-        }
-        rhs[nrow] *= inv_pivot;
-        for sub_row in (nrow + 1)..eqs.nrows() {
-            let fact =
-                std::mem::replace(&mut eqs[(sub_row, nrow)], Zero::zero());
-            for col in (nrow + 1)..eqs.ncols() {
-                let sub = fact * eqs[(nrow, col)];
-                eqs[(sub_row, col)] -= sub;
-            }
-            let sub = fact * rhs[nrow];
-            rhs[sub_row] -= sub;
-        }
-    }
-
-    // backward substitution
-    for nrow in (0..eqs.nrows()).rev().skip(1) {
-        for ncol in (nrow + 1)..eqs.nrows() {
-            let sub = eqs[(nrow, ncol)] * rhs[ncol];
-            rhs[nrow] -= sub;
-        }
-    }
-    Some(rhs)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,20 +126,10 @@ mod tests {
     use ffnt::Z64;
     use rand_xoshiro::rand_core::SeedableRng;
 
-    use crate::{traits::{One, TryEval}, _test_util::{gen_dense_rat1, sample_eq}};
+    use crate::{traits::TryEval, _test_util::{gen_dense_rat1, sample_eq}};
 
     fn log_init() {
         let _ = env_logger::builder().is_test(true).try_init();
-    }
-
-    #[test]
-    fn solve_linear() {
-        const P: u64 = 7;
-        let one: Z64<P> = One::one();
-        let sys = Matrix::from_vec(2, vec![one, -one, one, one]);
-        let rhs = vec![one, one];
-        let x = gauss_solve(sys, rhs).unwrap();
-        assert_eq!(x, [one, Zero::zero()]);
     }
 
     #[test]

@@ -3,55 +3,64 @@ use ffnt::Z64;
 use crate::{
     matrix::Matrix,
     rat::Rat,
-    rec_linear::gauss_solve,
     sparse_poly::{SparseMono, SparsePoly},
-    traits::{Eval, One},
+    traits::{Eval, One, Zero},
 };
 
 /// Reconstruct coefficients of a multivariate rational function over
 /// a finite field from known points
 // TODO: make a trait, impl for Rat<DensePoly>
+// TODO: code duplication with `rec_linear`
 pub fn rec_coeff<T, const P: u64, const N: usize>(
     rat: &Rat<SparsePoly<T, N>>,
     pts: &[([Z64<P>; N], Z64<P>)],
 ) -> Option<Rat<SparsePoly<Z64<P>, N>>> {
     assert!(!rat.den().is_empty());
-    // Number of unknown coefficients - one of them is set to 1 to fix the normalisation
-    let num_unknown = rat.num().len() + rat.den().len() - 1;
-    // Need at least one equation for each coefficient in rat
-    if pts.len() < num_unknown {
+    let num_coeff = rat.num().len() + rat.den().len();
+    // Need at least one equation for each *unknown* coefficient in rat
+    // one coefficient is set to one by convention
+    if pts.len() < num_coeff - 1 {
         return None;
     }
 
     // construct equations num(x) - q(x) * den(x) from known points x, q(x)
-    // by convention the first coefficient in den is normalised to 1
-    let mut lhs = Vec::with_capacity(num_unknown * num_unknown);
-    let mut rhs = Vec::with_capacity(num_unknown);
+    // by convention the coefficient of the highest-order monomial in
+    // the numerator is set to one
+    let mut eqs = Vec::with_capacity(num_coeff * pts.len());
     for (x, q_x) in pts {
+        for term in rat.den().terms() {
+            eqs.push(-*q_x * eval_pow(term, x));
+        }
         for term in rat.num().terms() {
-            lhs.push(eval_pow(term, x))
+            eqs.push(eval_pow(term, x));
         }
-        let (normalised, unknown) = rat.den().terms().split_first().unwrap();
-        for term in unknown {
-            lhs.push(-*q_x * eval_pow(term, x))
-        }
-        rhs.push(q_x * eval_pow(normalised, x));
     }
-    let lhs = Matrix::from_vec(num_unknown, lhs);
-    let Some(res) = gauss_solve(lhs, rhs) else {
-        return None;
-    };
-
-    let (num_coeff, den_coeff) = res.split_at(rat.num().len());
-    let num = num_coeff
+    let mut eqs = Matrix::from_vec(pts.len(), eqs);
+    eqs.row_reduce();
+    let mut den_coeffs = Vec::with_capacity(rat.den().len());
+    let mut num_coeffs = Vec::with_capacity(rat.num().len());
+    for (i, row) in eqs.rows().enumerate() {
+        if !row[i].is_one() || row[(i+1)..(eqs.ncols() - 1)].iter().any(|z| !z.is_zero()){
+            return None;
+        }
+        let coeff = -*row.last().unwrap();
+        if i < usize::from(rat.den().len()) {
+            den_coeffs.push(coeff);
+        } else {
+            num_coeffs.push(coeff);
+        }
+    }
+    num_coeffs.push(Z64::one());
+    let num = num_coeffs
         .iter()
         .copied()
         .zip(rat.num().terms().iter().map(|t| t.powers))
         .map(|(coeff, powers)| SparseMono { powers, coeff })
         .collect();
     let num = SparsePoly::from_raw_terms(num);
-    let den = std::iter::once(Z64::one())
-        .chain(den_coeff.iter().copied())
+    let den = den_coeffs
+        .iter()
+        .copied()
         .zip(rat.den().terms().iter().map(|t| t.powers))
         .map(|(coeff, powers)| SparseMono { powers, coeff })
         .collect();
@@ -112,6 +121,7 @@ mod tests {
             let nneeded = rat.num().len() + rat.den().len() - 1;
             let pts = gen_pts(&rat, nneeded, &mut rng);
             let rec = rec_coeff(&rat, &pts).unwrap();
+            eprintln!("reconstructed {rec}");
             assert!(sample_eq(&rat, &rec, &mut rng));
         }
     }

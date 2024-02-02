@@ -6,8 +6,12 @@
 
 use std::{
     fmt::{self, Display},
-    ops::{Index, IndexMut},
+    ops::{Index, IndexMut, MulAssign, Mul, SubAssign}, slice::Chunks,
 };
+
+use num_traits::Inv;
+
+use crate::traits::{Zero, One};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(crate) struct Matrix<T> {
@@ -18,12 +22,15 @@ pub(crate) struct Matrix<T> {
 
 impl<T> Matrix<T> {
     pub(crate) fn from_vec(nrows: usize, elem: Vec<T>) -> Self {
-        assert!(elem.is_empty() || elem.len() % nrows == 0);
         let ncols = if elem.is_empty() {
             0
         } else {
             elem.len() / nrows
         };
+        assert_eq!(
+            nrows * ncols, elem.len(),
+            "Number of elements has to be a multiple of the number of rows"
+        );
         Self { nrows, ncols, elem }
     }
 
@@ -31,11 +38,27 @@ impl<T> Matrix<T> {
         self.nrows
     }
 
+    pub(crate) fn row(&self, r: usize) -> &[T] {
+        let row_length = self.ncols();
+        let start_idx = r * row_length;
+        &self.elem[start_idx..(start_idx + row_length)]
+    }
+
     pub(crate) fn row_mut(&mut self, r: usize) -> &mut [T] {
         let row_length = self.ncols();
         let start_idx = r * row_length;
         &mut self.elem[start_idx..(start_idx + row_length)]
     }
+
+    pub(crate) fn rows(&self) -> Chunks<'_, T> {
+        self.elem.chunks(self.ncols())
+    }
+
+    // UNUSED:
+    // pub(crate) fn rows_mut(&mut self) -> ChunksMut<'_, T> {
+    //     let ncols = self.ncols();
+    //     self.elem.chunks_mut(ncols)
+    // }
 
     pub(crate) fn ncols(&self) -> usize {
         self.ncols
@@ -55,6 +78,82 @@ impl<T> Matrix<T> {
         let second_row =
             &mut rest[second_row_idx..(second_row_idx + row_length)];
         first_row.swap_with_slice(second_row)
+    }
+
+}
+
+impl<T> Matrix<T>
+where
+    T: Copy + One + Zero + Inv<Output = T> + MulAssign + Mul<Output = T> + SubAssign
+{
+    pub(crate) fn row_reduce(&mut self) {
+        self.forward_elimination();
+        self.backward_substitution();
+    }
+
+    fn forward_elimination(&mut self) {
+        for nrow in 0..self.nrows() {
+            let Some(pivot_col) = self.pivot(nrow) else {
+                return
+            };
+            let pivot = std::mem::replace(
+                &mut self[(nrow, pivot_col)],
+                T::one()
+            );
+            let inv_pivot = pivot.inv();
+            let row = self.row_mut(nrow);
+            for e in &mut row[pivot_col + 1..] {
+                *e *= inv_pivot;
+            }
+            for sub_row in (nrow + 1)..self.nrows() {
+                let fact = std::mem::replace(
+                    &mut self[(sub_row, pivot_col)],
+                    T::zero()
+                );
+                for col in (pivot_col + 1)..self.ncols() {
+                    let sub = fact * self[(nrow, col)];
+                    self[(sub_row, col)] -= sub;
+                }
+            }
+        }
+    }
+
+    fn backward_substitution(&mut self) {
+        for nrow in (1..self.nrows()).rev() {
+            let Some(pivot_col) = self.first_nonzero_col(nrow, nrow) else {
+                continue
+            };
+            let pivot_col = nrow + pivot_col;
+            debug_assert!(self[(nrow, pivot_col)].is_one());
+            for sub_row in 0..nrow {
+                let fact = std::mem::replace(
+                    &mut self[(sub_row, pivot_col)],
+                    T::zero()
+                );
+                for col in (pivot_col + 1)..self.ncols() {
+                    let sub = fact * self[(nrow, col)];
+                    self[(sub_row, col)] -= sub;
+                }
+            }
+        }
+    }
+
+    fn pivot(&mut self, nrow: usize) -> Option<usize> {
+        if !self[(nrow, nrow)].is_zero() {
+            return Some(nrow);
+        }
+        let (pivot_col, pivot_row) = (nrow..self.nrows())
+            .filter_map(
+                |n| self.first_nonzero_col(n, nrow).map(|c| (c, n))
+            ).min()?;
+        self.swap_rows(nrow, pivot_row);
+        Some(pivot_col + nrow)
+    }
+
+    fn first_nonzero_col(&self, nrow: usize, nskip: usize) -> Option<usize> {
+        self.row(nrow).iter()
+            .skip(nskip)
+            .position(|e| !e.is_zero())
     }
 }
 
@@ -100,4 +199,26 @@ impl<T: Display> Display for Matrix<T> {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ffnt::Z64;
+
+    #[test]
+    fn solve_linear() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        const P: u64 = 7;
+        let one: Z64<P> = One::one();
+        let mut sys = Matrix::from_vec(2, vec![
+            one, -one, one,
+            one, one, one,
+        ]);
+        sys.row_reduce();
+        eprintln!("{sys}");
+        // assert_eq!(x, [one, Zero::zero()]);
+    }
+
 }
