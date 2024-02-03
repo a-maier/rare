@@ -12,7 +12,7 @@ use crate::{
     arr::Arr,
     dense_poly::DensePoly,
     rat::Rat,
-    rec_linear::LinearRec,
+    rec_linear::{LinearRec, RecLinear},
     rec_thiele::ThieleRec,
     sparse_poly::{SparseMono, SparsePoly},
     traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
@@ -361,7 +361,7 @@ macro_rules! impl_rat_rec_mod_recursive {
                             nnum,
                             NonZeroUsize::new(nden).unwrap()
                         );
-                        let Some(rat) = linear_rec.rec_from_seq(t_pts) else {
+                        let Some(rat) = linear_rec.rec_linear(t_pts) else {
                             warn!("Reconstruction of rational function failed! Trying again.");
                             return self.ask_for_new_rat_pt()
                         };

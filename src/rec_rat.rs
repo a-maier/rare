@@ -8,7 +8,7 @@ use rug::{Integer, Rational, integer::IntegerExt64, ops::RemRounding};
 use seq_macro::seq;
 use paste::paste;
 
-use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::{RatRecMod, self}, arr::Arr, rec_linear_multivar::RecLinear};
+use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::{RatRecMod, self}, arr::Arr, rec_linear::RecLinear};
 
 const LARGE_PRIMES: [u64; 114] = [
     1152921504606846883, 1152921504606846869, 1152921504606846803,
@@ -211,7 +211,7 @@ seq! {N in 2..=16 {
                     }
                 }
 
-                let Some(next_mod_rec) = self.rat.rat.rec_linear(&pts) else {
+                let Some(next_mod_rec) = self.rat.rat.rec_linear(pts.iter().copied()) else {
                     return self.ask_for_new_mod();
                 };
                 let next_mod_rec = normalise_coeff(next_mod_rec);
@@ -430,7 +430,7 @@ where
                 }
             }
 
-            let next_mod_rec = mod_rec.rat.rec_linear(&pts)?;
+            let next_mod_rec = mod_rec.rat.rec_linear(pts)?;
             let next_mod_rec = normalise_coeff(next_mod_rec);
             debug!("Reconstructed {next_mod_rec}");
             mod_rec = combine_crt_rat(mod_rec, next_mod_rec);
