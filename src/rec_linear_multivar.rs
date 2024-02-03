@@ -7,65 +7,73 @@ use crate::{
     traits::{Eval, One, Zero},
 };
 
-/// Reconstruct coefficients of a multivariate rational function over
-/// a finite field from known points
-// TODO: make a trait, impl for Rat<DensePoly>
-// TODO: code duplication with `rec_linear`
-pub fn rec_coeff<T, const P: u64, const N: usize>(
-    rat: &Rat<SparsePoly<T, N>>,
-    pts: &[([Z64<P>; N], Z64<P>)],
-) -> Option<Rat<SparsePoly<Z64<P>, N>>> {
-    assert!(!rat.den().is_empty());
-    let num_coeff = rat.num().len() + rat.den().len();
-    // Need at least one equation for each *unknown* coefficient in rat
-    // one coefficient is set to one by convention
-    if pts.len() < num_coeff - 1 {
-        return None;
-    }
+/// Reconstruction using a linear system of equations built from the given points
+pub(crate) trait RecLinear<Pts> {
+    type Output;
 
-    // construct equations num(x) - q(x) * den(x) from known points x, q(x)
-    // by convention the coefficient of the highest-order monomial in
-    // the numerator is set to one
-    let mut eqs = Vec::with_capacity(num_coeff * pts.len());
-    for (x, q_x) in pts {
-        for term in rat.den().terms() {
-            eqs.push(-*q_x * eval_pow(term, x));
-        }
-        for term in rat.num().terms() {
-            eqs.push(eval_pow(term, x));
-        }
-    }
-    let mut eqs = Matrix::from_vec(pts.len(), eqs);
-    eqs.row_reduce();
-    let mut den_coeffs = Vec::with_capacity(rat.den().len());
-    let mut num_coeffs = Vec::with_capacity(rat.num().len());
-    for (i, row) in eqs.rows().enumerate() {
-        if !row[i].is_one() || row[(i+1)..(eqs.ncols() - 1)].iter().any(|z| !z.is_zero()){
+    /// Attempt the reconstruction
+    fn rec_linear(&self, pts: &[Pts]) -> Option<Self::Output>;
+}
+
+impl<T, const P: u64, const N: usize> RecLinear<([Z64<P>; N], Z64<P>)> for Rat<SparsePoly<T, N>> {
+    type Output = Rat<SparsePoly<Z64<P>, N>>;
+
+    fn rec_linear(
+        &self,
+        pts: &[([Z64<P>; N], Z64<P>)]
+    ) -> Option<Rat<SparsePoly<Z64<P>, N>>> {
+        assert!(!self.den().is_empty());
+        let num_coeff = self.num().len() + self.den().len();
+        // Need at least one equation for each *unknown* coefficient in rat
+        // one coefficient is set to one by convention
+        if pts.len() < num_coeff - 1 {
             return None;
         }
-        let coeff = -*row.last().unwrap();
-        if i < usize::from(rat.den().len()) {
-            den_coeffs.push(coeff);
-        } else {
-            num_coeffs.push(coeff);
+
+        // construct equations num(x) - q(x) * den(x) from known points x, q(x)
+        // by convention the coefficient of the highest-order monomial in
+        // the numerator is set to one
+        let mut eqs = Vec::with_capacity(num_coeff * pts.len());
+        for (x, q_x) in pts {
+            for term in self.den().terms() {
+                eqs.push(-*q_x * eval_pow(term, x));
+            }
+            for term in self.num().terms() {
+                eqs.push(eval_pow(term, x));
+            }
         }
+        let mut eqs = Matrix::from_vec(pts.len(), eqs);
+        eqs.row_reduce();
+        let mut den_coeffs = Vec::with_capacity(self.den().len());
+        let mut num_coeffs = Vec::with_capacity(self.num().len());
+        for (i, row) in eqs.rows().enumerate() {
+            if !row[i].is_one() || row[(i+1)..(eqs.ncols() - 1)].iter().any(|z| !z.is_zero()){
+                return None;
+            }
+            let coeff = -*row.last().unwrap();
+            if i < usize::from(self.den().len()) {
+                den_coeffs.push(coeff);
+            } else {
+                num_coeffs.push(coeff);
+            }
+        }
+        num_coeffs.push(Z64::one());
+        let num = num_coeffs
+            .iter()
+            .copied()
+            .zip(self.num().terms().iter().map(|t| t.powers))
+            .map(|(coeff, powers)| SparseMono { powers, coeff })
+            .collect();
+        let num = SparsePoly::from_raw_terms(num);
+        let den = den_coeffs
+            .iter()
+            .copied()
+            .zip(self.den().terms().iter().map(|t| t.powers))
+            .map(|(coeff, powers)| SparseMono { powers, coeff })
+            .collect();
+        let den = SparsePoly::from_raw_terms(den);
+        Some(Rat::from_num_den_unchecked(num, den))
     }
-    num_coeffs.push(Z64::one());
-    let num = num_coeffs
-        .iter()
-        .copied()
-        .zip(rat.num().terms().iter().map(|t| t.powers))
-        .map(|(coeff, powers)| SparseMono { powers, coeff })
-        .collect();
-    let num = SparsePoly::from_raw_terms(num);
-    let den = den_coeffs
-        .iter()
-        .copied()
-        .zip(rat.den().terms().iter().map(|t| t.powers))
-        .map(|(coeff, powers)| SparseMono { powers, coeff })
-        .collect();
-    let den = SparsePoly::from_raw_terms(den);
-    Some(Rat::from_num_den_unchecked(num, den))
 }
 
 fn eval_pow<T, const P: u64, const N: usize>(
@@ -120,7 +128,7 @@ mod tests {
             eprintln!("trying to reconstruct {rat}");
             let nneeded = rat.num().len() + rat.den().len() - 1;
             let pts = gen_pts(&rat, nneeded, &mut rng);
-            let rec = rec_coeff(&rat, &pts).unwrap();
+            let rec = rat.rec_linear(&pts).unwrap();
             eprintln!("reconstructed {rec}");
             assert!(sample_eq(&rat, &rec, &mut rng));
         }
@@ -145,7 +153,7 @@ mod tests {
         eprintln!("trying to reconstruct {rat}");
         let nneeded = rat.num().len() + rat.den().len() - 1;
         let pts = gen_pts(&rat, nneeded, &mut rng);
-        let res = rec_coeff(&rat, &pts).unwrap();
+        let res = rat.rec_linear(&pts).unwrap();
         eprintln!("reconstructed {res}");
         assert!(sample_eq(&rat, &res, &mut rng));
 
@@ -156,7 +164,7 @@ mod tests {
         eprintln!("trying to reconstruct {rat}");
         let nneeded = rat.num().len() + rat.den().len() - 1;
         let pts = gen_pts(&rat, nneeded, &mut rng);
-        let res = rec_coeff(&rat, &pts).unwrap();
+        let res = rat.rec_linear(&pts).unwrap();
         eprintln!("reconstructed {res}");
         assert!(sample_eq(&rat, &res, &mut rng));
 
@@ -167,7 +175,7 @@ mod tests {
         eprintln!("trying to reconstruct {rat}");
         let nneeded = rat.num().len() + rat.den().len() - 1;
         let pts = gen_pts(&rat, nneeded, &mut rng);
-        let res = rec_coeff(&rat, &pts).unwrap();
+        let res = rat.rec_linear(&pts).unwrap();
         eprintln!("reconstructed {res}");
         assert!(sample_eq(&rat, &res, &mut rng));
     }
