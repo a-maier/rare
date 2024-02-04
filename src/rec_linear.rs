@@ -146,6 +146,7 @@ fn solve_eqs<const P: u64>(
     }
     let mut eqs = Matrix::from_vec(neqs, eqs);
     eqs.row_reduce();
+    eqs.trim_end();
     debug!("After row reduction:\n{eqs}");
     let nnum =  eqs.ncols() - nden;
     let mut den_coeffs = Vec::with_capacity(nden);

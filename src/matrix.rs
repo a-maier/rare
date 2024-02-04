@@ -6,9 +6,10 @@
 
 use std::{
     fmt::{self, Display},
-    ops::{Index, IndexMut, MulAssign, Mul, SubAssign}, slice::Chunks,
+    ops::{Index, IndexMut, MulAssign, Mul, SubAssign}, slice::{Chunks, RChunks},
 };
 
+use log::trace;
 use num_traits::Inv;
 
 use crate::traits::{Zero, One};
@@ -54,6 +55,10 @@ impl<T> Matrix<T> {
         self.elem.chunks(self.ncols())
     }
 
+    pub(crate) fn rrows(&self) -> RChunks<'_, T> {
+        self.elem.rchunks(self.ncols())
+    }
+
     // UNUSED:
     // pub(crate) fn rows_mut(&mut self) -> ChunksMut<'_, T> {
     //     let ncols = self.ncols();
@@ -80,6 +85,11 @@ impl<T> Matrix<T> {
         first_row.swap_with_slice(second_row)
     }
 
+    pub(crate) fn truncate_rows(&mut self, nrows: usize) {
+        trace!("Truncating to {nrows} rows");
+        self.elem.truncate(nrows * self.ncols());
+        self.nrows = nrows;
+    }
 }
 
 impl<T> Matrix<T>
@@ -148,6 +158,21 @@ where
             ).min()?;
         self.swap_rows(nrow, pivot_row);
         Some(pivot_col + nrow)
+    }
+
+}
+
+impl<T: Zero> Matrix<T> {
+    pub(crate) fn trim_end(&mut self) {
+        let last_nonzero_row = self.rrows()
+            .position(|r| !r.iter().all(Zero::is_zero));
+        if let Some(last_nonzero_row) = last_nonzero_row {
+            let new_nrows = self.nrows - last_nonzero_row;
+            self.truncate_rows(new_nrows);
+        } else {
+            trace!("All rows zero");
+            self.elem.clear()
+        }
     }
 
     fn first_nonzero_col(&self, nrow: usize, nskip: usize) -> Option<usize> {
