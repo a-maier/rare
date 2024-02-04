@@ -353,4 +353,19 @@ mod tests {
             assert!(sample_eq(&rat, &reconstructed, &mut rng))
         }
     }
+
+    #[test]
+    fn rec_unknown_degree() {
+        log_init();
+        const P: u64 = 1152921504606846883;
+
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+
+        let rec = LinearRec::new(3, 3.try_into().unwrap());
+
+        let mut rat = |x: Z64<P>| Some(x - Z64::one());
+        let reconstructed = rat.rec_with_ran(rec, &mut rng).unwrap();
+
+    }
+
 }
