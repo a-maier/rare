@@ -54,8 +54,10 @@ where
             return Some(Zero::zero());
         }
         let num_coeffs = self.num_len + usize::from(self.den_len);
-        let mut eqs = Vec::with_capacity((num_coeffs - 1) * num_coeffs);
-        for (x, q_x) in pts.take(num_coeffs - 1) {
+        let neqs = std::cmp::max(pts.size_hint().0, num_coeffs - 1);
+        debug!("Reconstructing with {neqs} equations");
+        let mut eqs = Vec::with_capacity(neqs * num_coeffs);
+        for (x, q_x) in pts.take(neqs) {
             let mut den_coeff = -q_x;
             for _ in 0..usize::from(self.den_len) {
                 eqs.push(den_coeff);
@@ -68,7 +70,7 @@ where
             }
         }
         let (den_coeffs, num_coeffs) = solve_eqs(
-            num_coeffs - 1,
+            neqs,
             eqs,
             usize::from(self.den_len)
         )?;
@@ -94,12 +96,14 @@ where
             return Some(Zero::zero());
         }
         let num_coeffs = self.num().len() + self.den().len();
+        let neqs = std::cmp::max(pts.size_hint().0, num_coeffs - 1);
+        debug!("Reconstructing with {neqs} equations");
 
         // construct equations num(x) - q(x) * den(x) from known points x, q(x)
         // by convention the coefficient of the highest-order monomial in
         // the numerator is set to one
-        let mut eqs = Vec::with_capacity(num_coeffs * (num_coeffs - 1));
-        for (x, q_x) in pts.take(num_coeffs - 1) {
+        let mut eqs = Vec::with_capacity(neqs * num_coeffs);
+        for (x, q_x) in pts.take(neqs) {
             for term in self.den().terms() {
                 eqs.push(-q_x * eval_pow(term, &x));
             }
@@ -107,11 +111,7 @@ where
                 eqs.push(eval_pow(term, &x));
             }
         }
-        let (den_coeffs, num_coeffs) = solve_eqs(
-            num_coeffs - 1,
-            eqs,
-            self.den().len()
-        )?;
+        let (den_coeffs, num_coeffs) = solve_eqs(neqs, eqs, self.den().len())?;
         let num = num_coeffs
             .into_iter()
             .zip(self.num().terms().iter().map(|t| t.powers))
@@ -128,18 +128,13 @@ where
     }
 }
 
-// reduce `neqs` linear equations Σ c_i x_i = 0 with `neqs + 1`
-// unknowns x_i. `eqs` contains the coefficients c_i. The first `neqs +
-// 1` elements correspond to the c_i (in ascending order) for the
-// first equation, the next `neqs + 1` the c_i for the second eq,
-// etc. If `eqs` has less than `neqs * (neqs + 1)` elements `None` is
-// returned.
+// Solve `neqs` linear equations Σ c_i x_i = 0
 //
-// if the equations are linearly independent the return value is a
-// pair of solution vectors with sizes `nden` and `neqs - `nden`
-// in the sense that setting x_i to the ith entry solves the system.
-// The last entry in the second vector is one by convention.
-// If the equations are linearly dependent `None` is returned.
+// Returns `None` iff there is no non-trivial solution. Otherwise
+// returns one non-trivial solution with the first `nden` x_i in one
+// vector and the remainder in a second vector. The solution is chosen
+// such that as many x_i with the highest i as possible are set to zero
+// and one set to unity. TODO: implement that
 fn solve_eqs<const P: u64>(
     neqs: usize,
     eqs: Vec<Z64<P>>,
@@ -151,10 +146,12 @@ fn solve_eqs<const P: u64>(
     }
     let mut eqs = Matrix::from_vec(neqs, eqs);
     eqs.row_reduce();
-    let nnum =  neqs - nden + 1;
+    debug!("After row reduction:\n{eqs}");
+    let nnum =  eqs.ncols() - nden;
     let mut den_coeffs = Vec::with_capacity(nden);
     let mut num_coeffs = Vec::with_capacity(nnum);
     for (i, row) in eqs.rows().enumerate() {
+        // TODO: fix
         if !row[i].is_one() || row[(i+1)..(eqs.ncols() - 1)].iter().any(|z| !z.is_zero()){
             return None;
         }
