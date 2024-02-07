@@ -6,7 +6,7 @@
 
 use std::{
     fmt::{self, Display},
-    ops::{Index, IndexMut, MulAssign, Mul, SubAssign}, slice::{Chunks, RChunks},
+    ops::{Index, IndexMut, MulAssign, Mul, SubAssign}, slice::{Chunks, RChunks, ChunksMut},
 };
 
 use log::trace;
@@ -59,11 +59,10 @@ impl<T> Matrix<T> {
         self.elem.rchunks(self.ncols())
     }
 
-    // UNUSED:
-    // pub(crate) fn rows_mut(&mut self) -> ChunksMut<'_, T> {
-    //     let ncols = self.ncols();
-    //     self.elem.chunks_mut(ncols)
-    // }
+    pub(crate) fn rows_mut(&mut self) -> ChunksMut<'_, T> {
+        let ncols = self.ncols();
+        self.elem.chunks_mut(ncols)
+    }
 
     pub(crate) fn ncols(&self) -> usize {
         self.ncols

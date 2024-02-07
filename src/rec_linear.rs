@@ -72,7 +72,7 @@ where
         let (den_coeffs, num_coeffs) = solve_eqs(
             neqs,
             eqs,
-            usize::from(self.den_len)
+            usize::from(self.den_len),
         )?;
         let num = DensePoly::from_coeff(num_coeffs);
         let den = DensePoly::from_coeff(den_coeffs);
@@ -111,7 +111,11 @@ where
                 eqs.push(eval_pow(term, &x));
             }
         }
-        let (den_coeffs, num_coeffs) = solve_eqs(neqs, eqs, self.den().len())?;
+        let (den_coeffs, num_coeffs) = solve_eqs(
+            neqs,
+            eqs,
+            self.den().len()
+        )?;
         let num = num_coeffs
             .into_iter()
             .zip(self.num().terms().iter().map(|t| t.powers))
@@ -133,8 +137,8 @@ where
 // Returns `None` iff there is no non-trivial solution. Otherwise
 // returns one non-trivial solution with the first `nden` x_i in one
 // vector and the remainder in a second vector. The solution is chosen
-// such that as many x_i with the highest i as possible are set to zero
-// and one set to unity. TODO: implement that
+// such that as many x_i with the highest i as possible are set to
+// zero and one set to unity.
 fn solve_eqs<const P: u64>(
     neqs: usize,
     eqs: Vec<Z64<P>>,
@@ -147,24 +151,52 @@ fn solve_eqs<const P: u64>(
     let mut eqs = Matrix::from_vec(neqs, eqs);
     eqs.row_reduce();
     eqs.trim_end();
+    // Set as many variables as possible to zero, starting with the
+    // last one. We can set nth variable to zero if
+    // 1. The variable is not already expressed in terms of other
+    //    variables.
+    // 2. Setting the variable to zero mustn't turn the whole system
+    //    zero.
+    // Setting a variable to zero means setting the nth column to zero.
     debug!("After row reduction:\n{eqs}");
-    let nnum =  eqs.ncols() - nden;
-    let mut den_coeffs = Vec::with_capacity(nden);
-    let mut num_coeffs = Vec::with_capacity(nnum);
-    for (i, row) in eqs.rows().enumerate() {
-        // TODO: fix
-        if !row[i].is_one() || row[(i+1)..(eqs.ncols() - 1)].iter().any(|z| !z.is_zero()){
-            return None;
-        }
-        let coeff = -*row.last().unwrap();
-        if i < nden {
-            den_coeffs.push(coeff);
+    let mut coeffs = vec![Z64::zero(); eqs.ncols()];
+    for n in (0..eqs.ncols()).rev() {
+        if let Some(eq) = find_solved_for(&eqs, n) {
+            // all variables on the rhs have already been set to 0 or 1
+            coeffs[n] = - eq[n+1..].iter().fold(Z64::zero(), |a, b| a + b);
+        } else if can_set_to_zero(&eqs, n) {
+            set_var_to_zero(&mut eqs, n);
         } else {
-            num_coeffs.push(coeff);
+            coeffs[n] = One::one();
         }
     }
-    num_coeffs.push(Z64::one());
+    let num_coeffs = coeffs.split_off(nden);
+    let den_coeffs = coeffs;
     Some((den_coeffs, num_coeffs))
+}
+
+fn set_var_to_zero<const P: u64>(eqs: &mut Matrix<Z64<P>>, n: usize) {
+    for r in eqs.rows_mut() {
+        r[n] = Zero::zero();
+    }
+}
+
+// check which equation is the solution for the nth variable
+// i.e. the nth entry is the first non-vanishing one
+fn find_solved_for<const P: u64>(
+    eqs: &Matrix<Z64<P>>,
+    n: usize
+) -> Option<&[Z64<P>]> {
+    eqs.rows().find(|eq| eq.iter().position(|e| !e.is_zero()) == Some(n))
+}
+
+// Check if we can set a variable to zero without making all zeroes
+// the only solution. That means there has to be at least one row with
+// more than one non-vanishing entry left.
+fn can_set_to_zero<const P: u64>(eqs: &Matrix<Z64<P>>, n: usize) -> bool {
+    eqs.rows().any(
+        |eq| eq.iter().enumerate().filter(|(c, e)| !e.is_zero() && *c != n).count() > 1
+    )
 }
 
 fn eval_pow<T, const P: u64, const N: usize>(
@@ -361,11 +393,16 @@ mod tests {
 
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
+        let rat = Rat::from_num_den_unchecked(
+            DensePoly::from_coeff(vec![Z64::one(), Z64::one()]),
+            DensePoly::one()
+        );
+
         let rec = LinearRec::new(3, 3.try_into().unwrap());
-
-        let mut rat = |x: Z64<P>| Some(x - Z64::one());
-        let reconstructed = rat.rec_with_ran(rec, &mut rng).unwrap();
-
+        let reconstructed = (|x: Z64<P>| rat.try_eval(&x))
+            .rec_with_ran(rec, &mut rng)
+            .unwrap();
+        assert_eq!(rat, reconstructed);
     }
 
 }
