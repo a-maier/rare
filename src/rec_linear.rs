@@ -244,6 +244,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::iter::repeat_with;
+
     use rand::{SeedableRng, Rng};
 
     use crate::{_test_util::{gen_sparse_rat, sample_eq, gen_dense_rat1}, traits::TryEval};
@@ -403,6 +405,31 @@ mod tests {
             .rec_with_ran(rec, &mut rng)
             .unwrap();
         assert_eq!(rat, reconstructed);
+    }
+
+    #[test]
+    fn failed_rec() {
+        log_init();
+        const P: u64 = 1152921504606846883;
+
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+
+        let rat = Rat::from_num_den_unchecked(
+            DensePoly::from_coeff(vec![Z64::<P>::one(), Z64::one()]),
+            DensePoly::one()
+        );
+
+        let rec = LinearRec::new(1, 1.try_into().unwrap());
+        let pts = Vec::from_iter(
+            repeat_with(|| {
+                let x: Z64<P> = rng.gen();
+                rat.try_eval(&x).map(|q_x| (x, q_x))
+            })
+            .filter_map(|x| x)
+            .take(2)
+        );
+        let rec = rec.rec_linear(pts);
+        assert!(rec.is_none());
     }
 
 }
