@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use ffnt::Z64;
-use log::debug;
+use log::{debug, trace};
 
 use crate::{
     matrix::Matrix,
@@ -119,13 +119,21 @@ where
         let num = num_coeffs
             .into_iter()
             .zip(self.num().terms().iter().map(|t| t.powers))
-            .map(|(coeff, powers)| SparseMono { powers, coeff })
+            .filter_map(|(coeff, powers)| if coeff.is_zero() {
+                None
+            } else {
+                Some(SparseMono { powers, coeff })
+            })
             .collect();
         let num = SparsePoly::from_raw_terms(num);
         let den = den_coeffs
             .into_iter()
             .zip(self.den().terms().iter().map(|t| t.powers))
-            .map(|(coeff, powers)| SparseMono { powers, coeff })
+            .filter_map(|(coeff, powers)| if coeff.is_zero() {
+                None
+            } else {
+                Some(SparseMono { powers, coeff })
+            })
             .collect();
         let den = SparsePoly::from_raw_terms(den);
         Some(Rat::from_num_den_unchecked(num, den))
@@ -145,9 +153,10 @@ fn solve_eqs<const P: u64>(
     nden: usize,
 ) -> Option<(Vec<Z64<P>>, Vec<Z64<P>>)> {
     debug_assert!(nden <= neqs);
-    if eqs.len() < neqs * (neqs + 1) {
-        return None;
-    }
+    // if eqs.len() < neqs * (neqs + 1) {
+    //     debug!("Found {} points, need at least {}", eqs.len(), neqs * (neqs + 1));
+    //     return None;
+    // }
     let mut eqs = Matrix::from_vec(neqs, eqs);
     eqs.row_reduce();
     eqs.trim_end();
@@ -172,7 +181,11 @@ fn solve_eqs<const P: u64>(
     }
     let num_coeffs = coeffs.split_off(nden);
     let den_coeffs = coeffs;
-    Some((den_coeffs, num_coeffs))
+    if den_coeffs.iter().all(|c| c.is_zero()) {
+        None
+    } else {
+        Some((den_coeffs, num_coeffs))
+    }
 }
 
 fn set_var_to_zero<const P: u64>(eqs: &mut Matrix<Z64<P>>, n: usize) {
@@ -242,6 +255,110 @@ where
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+struct Unit { }
+
+impl Zero for Unit {
+    fn zero() -> Self {
+        unimplemented!("Internal logic error: `Unit::zero()` must never be called")
+    }
+
+    fn is_zero(&self) -> bool {
+        false
+    }
+}
+
+const UNIT: Unit = Unit{};
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub struct UnknownDegreeRec {
+    pub degree_ratio: f64,
+    pub extra_pts: usize,
+}
+
+impl UnknownDegreeRec {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn rec<Pts, const P: u64, const N: usize>(
+        &self,
+        pts: Pts
+    ) -> Option<Rat<SparsePoly<Z64<P>, N>>>
+    where
+        Pts: Iterator<Item = ([Z64<P>; N], Z64<P>)> + ExactSizeIterator
+    {
+        if pts.len() < self.extra_pts + 1 {
+            return None;
+        }
+        let ncoeff_total = 1 + pts.len() - self.extra_pts;
+        let num_frac = self.degree_ratio / (1. + self.degree_ratio);
+        let ncoeff_num = (num_frac * ncoeff_total as f64) as usize;
+        let ncoeff_den = ncoeff_total - ncoeff_num;
+        if ncoeff_num < 1 || ncoeff_den < 1 {
+            return None;
+        }
+        let num_ansatz = PowerIter::new()
+            .take(ncoeff_num)
+            .map(|p| SparseMono::new(UNIT, p))
+            .collect();
+        let num_ansatz = SparsePoly::from_raw_terms(num_ansatz);
+        let den_ansatz = PowerIter::new()
+            .take(ncoeff_den)
+            .map(|p| SparseMono::new(UNIT, p))
+            .collect();
+        let den_ansatz = SparsePoly::from_raw_terms(den_ansatz);
+        let rat = Rat::from_num_den_unchecked(num_ansatz, den_ansatz);
+        debug_assert_eq!(rat.num().len() + rat.den().len(), ncoeff_total);
+        trace!("Reconstruction ansatz: {rat:?}");
+        rat.rec_linear(pts)
+    }
+}
+
+impl Default for UnknownDegreeRec {
+    fn default() -> Self {
+        Self {
+            degree_ratio: 1.,
+            extra_pts: 1
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+struct PowerIter<const N: usize> (
+    [u32; N]
+);
+
+impl<const N: usize> PowerIter<N> {
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<const N: usize> Default for PowerIter<N> {
+    fn default() -> Self {
+        Self([0; N])
+    }
+}
+
+impl<const N: usize> Iterator for PowerIter<N> {
+    type Item = [u32; N];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let res = self.0;
+        let pos = self.0.iter().rposition(|&e| e > 0).unwrap_or(0);
+        if pos > 0 {
+            let val = std::mem::take(&mut self.0[pos]);
+            *self.0.last_mut().unwrap() = val - 1;
+            self.0[pos - 1] += 1;
+        } else {
+            let val = std::mem::take(&mut self.0[0]);
+            *self.0.last_mut().unwrap() = val + 1;
+        }
+        Some(res)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::iter::repeat_with;
@@ -288,6 +405,34 @@ mod tests {
             let rec = rat.rec_linear(pts).unwrap();
             eprintln!("reconstructed {rec}");
             assert!(sample_eq(&rat, &rec, &mut rng));
+        }
+    }
+
+    #[test]
+    fn rec_rat2_small_unknown_degree() {
+        log_init();
+
+        const NTESTS: u32 = 100;
+        const MAX_POW: u32 = 2; // update also MAX_PTS_NEEDED if this is changed!
+        const P: u64 = 1152921504606846883;
+        const N: usize = 2;
+        const EXTRA_PTS: usize = 2;
+        const MAX_PTS_NEEDED: usize = 25 + EXTRA_PTS;
+        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
+        let mut rec = UnknownDegreeRec::new();
+        rec.extra_pts = EXTRA_PTS;
+        for _ in 0..NTESTS {
+            let rat = gen_sparse_rat::<P, N>(MAX_POW, MAX_POW, &mut rng);
+            eprintln!("trying to reconstruct {rat}");
+            let min_nneeded = rat.num().len() + rat.den().len() - 1;
+            let pts = gen_pts(&rat, min_nneeded, &mut rng);
+            let res = rec.rec(pts.into_iter());
+            assert!(res.is_none());
+            let pts = gen_pts(&rat, MAX_PTS_NEEDED, &mut rng);
+            eprintln!("trying with {} points", pts.len());
+            let res = rec.rec(pts.into_iter()).unwrap();
+            eprintln!("reconstructed {res}");
+            assert!(sample_eq(&rat, &res, &mut rng));
         }
     }
 

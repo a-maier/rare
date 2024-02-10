@@ -101,7 +101,7 @@ where
     }
 
     fn forward_elimination(&mut self) {
-        for nrow in 0..self.nrows() {
+        for nrow in 0..std::cmp::min(self.nrows(), self.ncols()) {
             let Some(pivot_col) = self.pivot(nrow) else {
                 return
             };
