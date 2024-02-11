@@ -16,6 +16,7 @@ ffnt = { version = "0.5", features = ["num-traits", "rand"] }
 itertools = "0.12"
 lazy_static = "1.4"
 log = "0.4"
+num-integer = "0.1"
 num-traits = "0.2"
 paste = "1.0"
 rand = "0.8"

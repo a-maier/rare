@@ -2,6 +2,7 @@ use std::num::NonZeroUsize;
 
 use ffnt::Z64;
 use log::{debug, trace};
+use num_integer::Roots;
 
 use crate::{
     matrix::Matrix,
@@ -298,19 +299,19 @@ impl UnknownDegreeRec {
         if ncoeff_num < 1 || ncoeff_den < 1 {
             return None;
         }
-        let num_ansatz = PowerIter::new()
+        let num_ansatz = PowerIter::new(ncoeff_num)
             .take(ncoeff_num)
             .map(|p| SparseMono::new(UNIT, p))
             .collect();
         let num_ansatz = SparsePoly::from_raw_terms(num_ansatz);
-        let den_ansatz = PowerIter::new()
+        let den_ansatz = PowerIter::new(ncoeff_den)
             .take(ncoeff_den)
             .map(|p| SparseMono::new(UNIT, p))
             .collect();
         let den_ansatz = SparsePoly::from_raw_terms(den_ansatz);
         let rat = Rat::from_num_den_unchecked(num_ansatz, den_ansatz);
         debug_assert_eq!(rat.num().len() + rat.den().len(), ncoeff_total);
-        trace!("Reconstruction ansatz: {rat:?}");
+        trace!("Reconstruction ansatz: {rat:#?}");
         rat.rec_linear(pts)
     }
 }
@@ -325,19 +326,27 @@ impl Default for UnknownDegreeRec {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct PowerIter<const N: usize> (
-    [u32; N]
-);
+struct PowerIter<const N: usize> {
+    basis: usize,
+    num: usize,
+}
 
 impl<const N: usize> PowerIter<N> {
-    fn new() -> Self {
-        Self::default()
+    fn new(min_num_elem: usize) -> Self {
+        let min_num_elem = std::cmp::max(min_num_elem, 2);
+        Self{
+            basis: (min_num_elem - 1).nth_root(N.try_into().unwrap()) + 1,
+            num: 0
+        }
     }
 }
 
 impl<const N: usize> Default for PowerIter<N> {
     fn default() -> Self {
-        Self([0; N])
+        Self{
+            basis: 1,
+            num: 0,
+        }
     }
 }
 
@@ -345,17 +354,18 @@ impl<const N: usize> Iterator for PowerIter<N> {
     type Item = [u32; N];
 
     fn next(&mut self) -> Option<Self::Item> {
-        let res = self.0;
-        let pos = self.0.iter().rposition(|&e| e > 0).unwrap_or(0);
-        if pos > 0 {
-            let val = std::mem::take(&mut self.0[pos]);
-            *self.0.last_mut().unwrap() = val - 1;
-            self.0[pos - 1] += 1;
-        } else {
-            let val = std::mem::take(&mut self.0[0]);
-            *self.0.last_mut().unwrap() = val + 1;
+        let mut res = [0; N];
+        let mut num = self.num;
+        self.num += 1;
+        for e in &mut res {
+            *e = (num % self.basis) as u32;
+            num /= self.basis;
         }
-        Some(res)
+        if num > 0 {
+            None
+        } else {
+            Some(res)
+        }
     }
 }
 
@@ -413,11 +423,11 @@ mod tests {
         log_init();
 
         const NTESTS: u32 = 100;
-        const MAX_POW: u32 = 2; // update also MAX_PTS_NEEDED if this is changed!
+        const MAX_POW: u32 = 2;
         const P: u64 = 1152921504606846883;
         const N: usize = 2;
         const EXTRA_PTS: usize = 2;
-        const MAX_PTS_NEEDED: usize = 25 + EXTRA_PTS;
+        let max_pts_needed = 2 * (MAX_POW as usize + 1).pow(N as u32) + EXTRA_PTS - 1;
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let mut rec = UnknownDegreeRec::new();
         rec.extra_pts = EXTRA_PTS;
@@ -428,7 +438,7 @@ mod tests {
             let pts = gen_pts(&rat, min_nneeded, &mut rng);
             let res = rec.rec(pts.into_iter());
             assert!(res.is_none());
-            let pts = gen_pts(&rat, MAX_PTS_NEEDED, &mut rng);
+            let pts = gen_pts(&rat, max_pts_needed, &mut rng);
             eprintln!("trying with {} points", pts.len());
             let res = rec.rec(pts.into_iter()).unwrap();
             eprintln!("reconstructed {res}");
@@ -550,6 +560,33 @@ mod tests {
             .rec_with_ran(rec, &mut rng)
             .unwrap();
         assert_eq!(rat, reconstructed);
+    }
+
+    #[test]
+    fn power_iter() {
+        log_init();
+
+        let mut iter = PowerIter::new(1);
+        let next: [_; 1] = iter.next().unwrap();
+        assert_eq!(next, [0]);
+
+        let mut iter = PowerIter::new(2);
+        let next: [_; 2] = iter.next().unwrap();
+        assert_eq!(next, [0, 0]);
+        let next = iter.next().unwrap();
+        assert_eq!(next, [1, 0]);
+
+        let mut iter = PowerIter::new(5);
+        let next: [_; 2] = iter.next().unwrap();
+        assert_eq!(next, [0, 0]);
+        let next = iter.next().unwrap();
+        assert_eq!(next, [1, 0]);
+        let next = iter.next().unwrap();
+        assert_eq!(next, [2, 0]);
+        let next = iter.next().unwrap();
+        assert_eq!(next, [0, 1]);
+        let next = iter.next().unwrap();
+        assert_eq!(next, [1, 1]);
     }
 
     #[test]
