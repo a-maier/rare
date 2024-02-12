@@ -12,7 +12,7 @@ use paste::paste;
 use crate::{
     sparse_poly::{SparseMono, SparsePoly},
     traits::{Eval, One, Shift, TryEval, WithVars, Zero},
-    util::{ALL_VARS, slice_start},
+    util::{slice_start, ALL_VARS},
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -515,10 +515,12 @@ impl<const P: u64> Eval<[Z64<P>; 1]> for DensePoly<Z64<P>> {}
 fn binom<const P: u64>(n: usize, k: usize) -> Z64<P> {
     assert!((n as u64) < P);
     assert!((k as u64) < P);
-    let num = ((n - k + 1)..=n)
-        .fold(Z64::one(), |acc, i| acc * unsafe { Z64::new_unchecked(i as u64) });
-    let den =
-        (1..=k).fold(Z64::one(), |acc, i| acc * unsafe { Z64::new_unchecked(i as u64) });
+    let num = ((n - k + 1)..=n).fold(Z64::one(), |acc, i| {
+        acc * unsafe { Z64::new_unchecked(i as u64) }
+    });
+    let den = (1..=k).fold(Z64::one(), |acc, i| {
+        acc * unsafe { Z64::new_unchecked(i as u64) }
+    });
     num / den
 }
 

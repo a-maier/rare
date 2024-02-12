@@ -5,11 +5,12 @@ use log::{debug, trace};
 use num_integer::Roots;
 
 use crate::{
+    dense_poly::DensePoly,
     matrix::Matrix,
     rand::pt_iter,
     rat::Rat,
     sparse_poly::{SparseMono, SparsePoly},
-    traits::{Eval, One, Zero, Rec}, dense_poly::DensePoly,
+    traits::{Eval, One, Rec, Zero},
 };
 
 /// Reconstruction using a linear system of equations built from the given points
@@ -41,10 +42,7 @@ where
 {
     type Output = Rat<DensePoly<Z64<P>>>;
 
-    fn rec_linear(
-        &self,
-        pts: Pts
-    ) -> Option<Rat<DensePoly<Z64<P>>>> {
+    fn rec_linear(&self, pts: Pts) -> Option<Rat<DensePoly<Z64<P>>>> {
         let pts = pts.into_iter();
         debug!(
             "1d rational function reconstruction with known degrees {}/{}",
@@ -70,27 +68,22 @@ where
                 x_to_i *= x;
             }
         }
-        let (den_coeffs, num_coeffs) = solve_eqs(
-            neqs,
-            eqs,
-            usize::from(self.den_len),
-        )?;
+        let (den_coeffs, num_coeffs) =
+            solve_eqs(neqs, eqs, usize::from(self.den_len))?;
         let num = DensePoly::from_coeff(num_coeffs);
         let den = DensePoly::from_coeff(den_coeffs);
         Some(Rat::from_num_den_unchecked(num, den))
     }
 }
 
-impl<Pts, T, const P: u64, const N: usize> RecLinear<Pts> for Rat<SparsePoly<T, N>>
+impl<Pts, T, const P: u64, const N: usize> RecLinear<Pts>
+    for Rat<SparsePoly<T, N>>
 where
     Pts: IntoIterator<Item = ([Z64<P>; N], Z64<P>)>,
 {
     type Output = Rat<SparsePoly<Z64<P>, N>>;
 
-    fn rec_linear(
-        &self,
-        pts: Pts
-    ) -> Option<Rat<SparsePoly<Z64<P>, N>>> {
+    fn rec_linear(&self, pts: Pts) -> Option<Rat<SparsePoly<Z64<P>, N>>> {
         let pts = pts.into_iter();
         assert!(!self.den().is_empty());
         if self.num().len() == 0 {
@@ -112,28 +105,28 @@ where
                 eqs.push(eval_pow(term, &x));
             }
         }
-        let (den_coeffs, num_coeffs) = solve_eqs(
-            neqs,
-            eqs,
-            self.den().len()
-        )?;
+        let (den_coeffs, num_coeffs) = solve_eqs(neqs, eqs, self.den().len())?;
         let num = num_coeffs
             .into_iter()
             .zip(self.num().terms().iter().map(|t| t.powers))
-            .filter_map(|(coeff, powers)| if coeff.is_zero() {
-                None
-            } else {
-                Some(SparseMono { powers, coeff })
+            .filter_map(|(coeff, powers)| {
+                if coeff.is_zero() {
+                    None
+                } else {
+                    Some(SparseMono { powers, coeff })
+                }
             })
             .collect();
         let num = SparsePoly::from_raw_terms(num);
         let den = den_coeffs
             .into_iter()
             .zip(self.den().terms().iter().map(|t| t.powers))
-            .filter_map(|(coeff, powers)| if coeff.is_zero() {
-                None
-            } else {
-                Some(SparseMono { powers, coeff })
+            .filter_map(|(coeff, powers)| {
+                if coeff.is_zero() {
+                    None
+                } else {
+                    Some(SparseMono { powers, coeff })
+                }
             })
             .collect();
         let den = SparsePoly::from_raw_terms(den);
@@ -173,7 +166,7 @@ fn solve_eqs<const P: u64>(
     for n in (0..eqs.ncols()).rev() {
         if let Some(eq) = find_solved_for(&eqs, n) {
             // all variables on the rhs have already been set to 0 or 1
-            coeffs[n] = - eq[n+1..].iter().fold(Z64::zero(), |a, b| a + b);
+            coeffs[n] = -eq[n + 1..].iter().fold(Z64::zero(), |a, b| a + b);
         } else if can_set_to_zero(&eqs, n) {
             set_var_to_zero(&mut eqs, n);
         } else {
@@ -199,18 +192,23 @@ fn set_var_to_zero<const P: u64>(eqs: &mut Matrix<Z64<P>>, n: usize) {
 // i.e. the nth entry is the first non-vanishing one
 fn find_solved_for<const P: u64>(
     eqs: &Matrix<Z64<P>>,
-    n: usize
+    n: usize,
 ) -> Option<&[Z64<P>]> {
-    eqs.rows().find(|eq| eq.iter().position(|e| !e.is_zero()) == Some(n))
+    eqs.rows()
+        .find(|eq| eq.iter().position(|e| !e.is_zero()) == Some(n))
 }
 
 // Check if we can set a variable to zero without making all zeroes
 // the only solution. That means there has to be at least one row with
 // more than one non-vanishing entry left.
 fn can_set_to_zero<const P: u64>(eqs: &Matrix<Z64<P>>, n: usize) -> bool {
-    eqs.rows().any(
-        |eq| eq.iter().enumerate().filter(|(c, e)| !e.is_zero() && *c != n).count() > 1
-    )
+    eqs.rows().any(|eq| {
+        eq.iter()
+            .enumerate()
+            .filter(|(c, e)| !e.is_zero() && *c != n)
+            .count()
+            > 1
+    })
 }
 
 fn eval_pow<T, const P: u64, const N: usize>(
@@ -257,11 +255,13 @@ where
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct Unit { }
+struct Unit {}
 
 impl Zero for Unit {
     fn zero() -> Self {
-        unimplemented!("Internal logic error: `Unit::zero()` must never be called")
+        unimplemented!(
+            "Internal logic error: `Unit::zero()` must never be called"
+        )
     }
 
     fn is_zero(&self) -> bool {
@@ -269,7 +269,7 @@ impl Zero for Unit {
     }
 }
 
-const UNIT: Unit = Unit{};
+const UNIT: Unit = Unit {};
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct UnknownDegreeRec {
@@ -284,10 +284,10 @@ impl UnknownDegreeRec {
 
     pub fn rec<Pts, const P: u64, const N: usize>(
         &self,
-        pts: Pts
+        pts: Pts,
     ) -> Option<Rat<SparsePoly<Z64<P>, N>>>
     where
-        Pts: Iterator<Item = ([Z64<P>; N], Z64<P>)> + ExactSizeIterator
+        Pts: Iterator<Item = ([Z64<P>; N], Z64<P>)> + ExactSizeIterator,
     {
         if pts.len() < self.extra_pts + 1 {
             return None;
@@ -320,7 +320,7 @@ impl Default for UnknownDegreeRec {
     fn default() -> Self {
         Self {
             degree_ratio: 1.,
-            extra_pts: 1
+            extra_pts: 1,
         }
     }
 }
@@ -334,19 +334,16 @@ struct PowerIter<const N: usize> {
 impl<const N: usize> PowerIter<N> {
     fn new(min_num_elem: usize) -> Self {
         let min_num_elem = std::cmp::max(min_num_elem, 2);
-        Self{
+        Self {
             basis: (min_num_elem - 1).nth_root(N.try_into().unwrap()) + 1,
-            num: 0
+            num: 0,
         }
     }
 }
 
 impl<const N: usize> Default for PowerIter<N> {
     fn default() -> Self {
-        Self{
-            basis: 1,
-            num: 0,
-        }
+        Self { basis: 1, num: 0 }
     }
 }
 
@@ -373,9 +370,12 @@ impl<const N: usize> Iterator for PowerIter<N> {
 mod tests {
     use std::iter::repeat_with;
 
-    use rand::{SeedableRng, Rng};
+    use rand::{Rng, SeedableRng};
 
-    use crate::{_test_util::{gen_sparse_rat, sample_eq, gen_dense_rat1}, traits::TryEval};
+    use crate::{
+        _test_util::{gen_dense_rat1, gen_sparse_rat, sample_eq},
+        traits::TryEval,
+    };
 
     use super::*;
 
@@ -427,7 +427,8 @@ mod tests {
         const P: u64 = 1152921504606846883;
         const N: usize = 2;
         const EXTRA_PTS: usize = 2;
-        let max_pts_needed = 2 * (MAX_POW as usize + 1).pow(N as u32) + EXTRA_PTS - 1;
+        let max_pts_needed =
+            2 * (MAX_POW as usize + 1).pow(N as u32) + EXTRA_PTS - 1;
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let mut rec = UnknownDegreeRec::new();
         rec.extra_pts = EXTRA_PTS;
@@ -552,7 +553,7 @@ mod tests {
 
         let rat = Rat::from_num_den_unchecked(
             DensePoly::from_coeff(vec![Z64::one(), Z64::one()]),
-            DensePoly::one()
+            DensePoly::one(),
         );
 
         let rec = LinearRec::new(3, 3.try_into().unwrap());
@@ -598,7 +599,7 @@ mod tests {
 
         let rat = Rat::from_num_den_unchecked(
             DensePoly::from_coeff(vec![Z64::<P>::one(), Z64::one()]),
-            DensePoly::one()
+            DensePoly::one(),
         );
 
         let rec = LinearRec::new(1, 1.try_into().unwrap());
@@ -608,10 +609,9 @@ mod tests {
                 rat.try_eval(&x).map(|q_x| (x, q_x))
             })
             .filter_map(|x| x)
-            .take(2)
+            .take(2),
         );
         let rec = rec.rec_linear(pts);
         assert!(rec.is_none());
     }
-
 }

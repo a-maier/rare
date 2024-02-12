@@ -5,15 +5,19 @@ use galois_fields::Z64;
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 use rare::{
+    _test_util::{
+        gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2,
+        gen_sparse_rat,
+    },
     dense_poly::{DensePoly, DensePoly2},
     rat::Rat,
     rec_linear::LinearRec,
+    rec_linear_multivar::rec_coeff,
     rec_newton::{NewtonPoly, NewtonPoly2, NewtonRec},
-    rec_thiele::{ThieleRat, ThieleRec},
     rec_rat_mod::RatRecMod,
+    rec_thiele::{ThieleRat, ThieleRec},
     sparse_poly::SparsePoly,
     traits::{Eval, Rec, TryEval},
-    _test_util::{gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2, gen_sparse_rat}, rec_linear_multivar::rec_coeff
 };
 
 fn rec_poly1<const P: u64>(
@@ -159,8 +163,9 @@ fn rec_rat2_linear<const P: u64>(
                 } else {
                     None
                 }
-            }).filter_map(|pt| pt)
-            .take(nneeded)
+            })
+            .filter_map(|pt| pt)
+            .take(nneeded),
         );
         res.push(rec_coeff(&rat, &pts).unwrap());
     }
@@ -220,10 +225,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         *rat = gen_sparse_rat(N / 2, N / 2, &mut rng)
     }
 
-    c.bench_function(
-        "rat2 (known degrees)",
-        |b| b.iter(|| rec_rat2_linear(&rats))
-    );
+    c.bench_function("rat2 (known degrees)", |b| {
+        b.iter(|| rec_rat2_linear(&rats))
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);

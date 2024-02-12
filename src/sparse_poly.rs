@@ -9,12 +9,12 @@ use std::{
 use ffnt::Z64;
 use num_traits::Pow;
 use paste::paste;
-use rug::{Integer, integer::IntegerExt64, Complete};
+use rug::{integer::IntegerExt64, Complete, Integer};
 
 use crate::{
     dense_poly::DensePoly,
     traits::{Eval, One, TryEval, WithVars, Zero},
-    util::{ALL_VARS, slice_start}
+    util::{slice_start, ALL_VARS},
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -340,9 +340,10 @@ where
     }
 }
 
-impl<T, const Z: usize> Eval<[T; Z]> for SparsePoly<T, Z>
-where SparsePoly<T, Z>: TryEval<[T; Z]>
-{}
+impl<T, const Z: usize> Eval<[T; Z]> for SparsePoly<T, Z> where
+    SparsePoly<T, Z>: TryEval<[T; Z]>
+{
+}
 
 impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     for SparsePoly<Integer, Z>
@@ -358,7 +359,10 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     }
 }
 
-impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparsePoly<Integer, Z> {}
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]>
+    for SparsePoly<Integer, Z>
+{
+}
 
 impl<T: Zero> From<DensePoly<T>> for SparsePoly<T, 1> {
     fn from(source: DensePoly<T>) -> Self {
@@ -427,8 +431,8 @@ pub struct FmtSparsePoly<'a, 'b, V, T, const Z: usize> {
     vars: &'b [V; Z],
 }
 
-impl<'a, 'b, V: Display + 'b, T: 'a, const Z: usize>
-    WithVars<'a, &'b [V; Z]> for SparsePoly<T, Z>
+impl<'a, 'b, V: Display + 'b, T: 'a, const Z: usize> WithVars<'a, &'b [V; Z]>
+    for SparsePoly<T, Z>
 {
     type Output = FmtSparsePoly<'a, 'b, V, T, Z>;
 
@@ -470,7 +474,8 @@ impl<'a, 'b, V: Display, const Z: usize> Display
                 if term.coeff.is_positive() {
                     write!(f, " + {}", term.with_vars(self.vars))?
                 } else {
-                    let term = SparseMono::new((-&term.coeff).complete(), term.powers);
+                    let term =
+                        SparseMono::new((-&term.coeff).complete(), term.powers);
                     write!(f, " - {}", term.with_vars(self.vars))?
                 }
             }
@@ -886,19 +891,22 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     }
 }
 
-impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for SparseMono<Integer, Z> {}
-
-impl<const Z: usize> TryEval<[Integer; Z]>
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]>
     for SparseMono<Integer, Z>
 {
+}
+
+impl<const Z: usize> TryEval<[Integer; Z]> for SparseMono<Integer, Z> {
     type Output = Integer;
 
     fn try_eval(&self, x: &[Integer; Z]) -> Option<Self::Output> {
         Some(
-            &self.coeff *
-                x.iter()
-                .zip(self.powers.iter().copied())
-                .fold(Integer::one(), |acc, (x, y)| acc * x.pow(y).complete()),
+            &self.coeff
+                * x.iter()
+                    .zip(self.powers.iter().copied())
+                    .fold(Integer::one(), |acc, (x, y)| {
+                        acc * x.pow(y).complete()
+                    }),
         )
     }
 }
@@ -974,15 +982,18 @@ impl<const Z: usize> Display for SparseMono<Integer, Z> {
     }
 }
 
-impl<const P: u64, const N: usize> From<SparsePoly<Z64<P>, N>> for SparsePoly<Integer, N> {
+impl<const P: u64, const N: usize> From<SparsePoly<Z64<P>, N>>
+    for SparsePoly<Integer, N>
+{
     fn from(p: SparsePoly<Z64<P>, N>) -> Self {
-        let terms = p.into_terms().into_iter()
+        let terms = p
+            .into_terms()
+            .into_iter()
             .map(|c| SparseMono::new(i64::from(c.coeff).into(), c.powers))
             .collect();
         SparsePoly::from_raw_terms(terms)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

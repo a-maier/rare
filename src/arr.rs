@@ -1,10 +1,13 @@
-use std::{ops::{Index, IndexMut, AddAssign, Add, SubAssign, Sub, Neg, MulAssign, Mul}, fmt::{Display, self}};
+use std::{
+    fmt::{self, Display},
+    ops::{
+        Add, AddAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
+    },
+};
 
 // array class that supports basic element-wise arithmetics
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub(crate) struct Arr<T, const N: usize> (
-    pub [T; N]
-);
+pub(crate) struct Arr<T, const N: usize>(pub [T; N]);
 
 impl<T, const N: usize> Index<usize> for Arr<T, N> {
     type Output = T;
@@ -81,7 +84,7 @@ impl<'a, T: MulAssign<&'a T>, const N: usize> MulAssign<&'a T> for Arr<T, N> {
 impl<T: Copy + Mul, const N: usize> Mul<T> for Arr<T, N> {
     type Output = Arr<<T as Mul>::Output, N>;
 
-    fn mul(self, rhs: T) -> Self::Output{
+    fn mul(self, rhs: T) -> Self::Output {
         Arr(self.0.map(|n| n * rhs))
     }
 }
@@ -89,7 +92,7 @@ impl<T: Copy + Mul, const N: usize> Mul<T> for Arr<T, N> {
 impl<'a, T: Mul<&'a T>, const N: usize> Mul<&'a T> for Arr<T, N> {
     type Output = Arr<<T as Mul<&'a T>>::Output, N>;
 
-    fn mul(self, rhs: &'a T) -> Self::Output{
+    fn mul(self, rhs: &'a T) -> Self::Output {
         Arr(self.0.map(|n| n * rhs))
     }
 }

@@ -6,13 +6,14 @@
 
 use std::{
     fmt::{self, Display},
-    ops::{Index, IndexMut, MulAssign, Mul, SubAssign}, slice::{Chunks, RChunks, ChunksMut},
+    ops::{Index, IndexMut, Mul, MulAssign, SubAssign},
+    slice::{Chunks, ChunksMut, RChunks},
 };
 
 use log::trace;
 use num_traits::Inv;
 
-use crate::traits::{Zero, One};
+use crate::traits::{One, Zero};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(crate) struct Matrix<T> {
@@ -29,7 +30,8 @@ impl<T> Matrix<T> {
             elem.len() / nrows
         };
         assert_eq!(
-            nrows * ncols, elem.len(),
+            nrows * ncols,
+            elem.len(),
             "Number of elements has to be a multiple of the number of rows"
         );
         Self { nrows, ncols, elem }
@@ -93,7 +95,13 @@ impl<T> Matrix<T> {
 
 impl<T> Matrix<T>
 where
-    T: Copy + One + Zero + Inv<Output = T> + MulAssign + Mul<Output = T> + SubAssign
+    T: Copy
+        + One
+        + Zero
+        + Inv<Output = T>
+        + MulAssign
+        + Mul<Output = T>
+        + SubAssign,
 {
     pub(crate) fn row_reduce(&mut self) {
         self.forward_elimination();
@@ -103,12 +111,10 @@ where
     fn forward_elimination(&mut self) {
         for nrow in 0..std::cmp::min(self.nrows(), self.ncols()) {
             let Some(pivot_col) = self.pivot(nrow) else {
-                return
+                return;
             };
-            let pivot = std::mem::replace(
-                &mut self[(nrow, pivot_col)],
-                T::one()
-            );
+            let pivot =
+                std::mem::replace(&mut self[(nrow, pivot_col)], T::one());
             let inv_pivot = pivot.inv();
             let row = self.row_mut(nrow);
             for e in &mut row[pivot_col + 1..] {
@@ -117,7 +123,7 @@ where
             for sub_row in (nrow + 1)..self.nrows() {
                 let fact = std::mem::replace(
                     &mut self[(sub_row, pivot_col)],
-                    T::zero()
+                    T::zero(),
                 );
                 for col in (pivot_col + 1)..self.ncols() {
                     let sub = fact * self[(nrow, col)];
@@ -130,14 +136,14 @@ where
     fn backward_substitution(&mut self) {
         for nrow in (1..self.nrows()).rev() {
             let Some(pivot_col) = self.first_nonzero_col(nrow, nrow) else {
-                continue
+                continue;
             };
             let pivot_col = nrow + pivot_col;
             debug_assert!(self[(nrow, pivot_col)].is_one());
             for sub_row in 0..nrow {
                 let fact = std::mem::replace(
                     &mut self[(sub_row, pivot_col)],
-                    T::zero()
+                    T::zero(),
                 );
                 for col in (pivot_col + 1)..self.ncols() {
                     let sub = fact * self[(nrow, col)];
@@ -152,19 +158,17 @@ where
             return Some(nrow);
         }
         let (pivot_col, pivot_row) = (nrow..self.nrows())
-            .filter_map(
-                |n| self.first_nonzero_col(n, nrow).map(|c| (c, n))
-            ).min()?;
+            .filter_map(|n| self.first_nonzero_col(n, nrow).map(|c| (c, n)))
+            .min()?;
         self.swap_rows(nrow, pivot_row);
         Some(pivot_col + nrow)
     }
-
 }
 
 impl<T: Zero> Matrix<T> {
     pub(crate) fn trim_end(&mut self) {
-        let last_nonzero_row = self.rrows()
-            .position(|r| !r.iter().all(Zero::is_zero));
+        let last_nonzero_row =
+            self.rrows().position(|r| !r.iter().all(Zero::is_zero));
         if let Some(last_nonzero_row) = last_nonzero_row {
             let new_nrows = self.nrows - last_nonzero_row;
             self.truncate_rows(new_nrows);
@@ -175,9 +179,7 @@ impl<T: Zero> Matrix<T> {
     }
 
     fn first_nonzero_col(&self, nrow: usize, nskip: usize) -> Option<usize> {
-        self.row(nrow).iter()
-            .skip(nskip)
-            .position(|e| !e.is_zero())
+        self.row(nrow).iter().skip(nskip).position(|e| !e.is_zero())
     }
 }
 
@@ -236,13 +238,9 @@ mod tests {
 
         const P: u64 = 7;
         let one: Z64<P> = One::one();
-        let mut sys = Matrix::from_vec(2, vec![
-            one, -one, one,
-            one, one, one,
-        ]);
+        let mut sys = Matrix::from_vec(2, vec![one, -one, one, one, one, one]);
         sys.row_reduce();
         eprintln!("{sys}");
         // assert_eq!(x, [one, Zero::zero()]);
     }
-
 }

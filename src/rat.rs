@@ -4,12 +4,14 @@ use std::{
 };
 
 use ffnt::Z64;
-use rug::{Integer, Rational, ops::NegAssign};
+use rug::{ops::NegAssign, Integer, Rational};
 use thiserror::Error;
 
 use crate::{
+    arr::Arr,
     dense_poly::DensePoly,
-    traits::{One, TryEval, WithVars, Zero}, arr::Arr, sparse_poly::{SparsePoly, SparseMono},
+    sparse_poly::{SparseMono, SparsePoly},
+    traits::{One, TryEval, WithVars, Zero},
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -156,16 +158,16 @@ impl<'a, 'b, V: Display, const P: u64> Display
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[derive(Error)]
-pub struct NoneError { }
+#[derive(
+    Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Error,
+)]
+pub struct NoneError {}
 
 impl Display for NoneError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "No result found")
     }
 }
-
 
 pub type Rat64 = Rat<i64, u64>;
 
@@ -175,16 +177,16 @@ impl<const P: u64> TryFrom<Z64<P>> for Rat64 {
     fn try_from(value: Z64<P>) -> Result<Self, Self::Error> {
         let max_bound = (P / 2) as i64;
         let max_den = (max_bound as f64).powf(1. / 4.) as i64;
-        wang_reconstruct(value, max_bound / max_den, max_den).ok_or(NoneError{})
+        wang_reconstruct(value, max_bound / max_den, max_den)
+            .ok_or(NoneError {})
     }
 }
 
 fn wang_reconstruct<const P: u64>(
     value: Z64<P>,
     max_num: i64,
-    max_den: i64
+    max_den: i64,
 ) -> Option<Rat64> {
-
     let mut v = Arr([P as i64, 0]);
     let mut w = Arr([i64::from(value), 1]);
     while w[0] > max_num {
@@ -209,14 +211,18 @@ fn gcd(mut a: i64, mut b: i64) -> i64 {
     a
 }
 
-impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>> for Rat<SparsePoly<Integer, N>> {
+impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>>
+    for Rat<SparsePoly<Integer, N>>
+{
     fn from(rat: Rat<SparsePoly<Z64<P>, N>>) -> Self {
         let (num, den) = rat.into_num_den();
         Rat::from_num_den_unchecked(num.into(), den.into())
     }
 }
 
-impl<const N: usize> From<Rat<SparsePoly<Rational, N>>> for Rat<SparsePoly<Integer, N>> {
+impl<const N: usize> From<Rat<SparsePoly<Rational, N>>>
+    for Rat<SparsePoly<Integer, N>>
+{
     fn from(rat: Rat<SparsePoly<Rational, N>>) -> Self {
         let (num, den) = rat.into_num_den();
 
@@ -233,13 +239,15 @@ impl<const N: usize> From<Rat<SparsePoly<Rational, N>>> for Rat<SparsePoly<Integ
         }
 
         let to_int = |p: SparsePoly<Rational, N>, lcm| {
-            let terms = p.into_terms().into_iter().map(
-                |t| {
+            let terms = p
+                .into_terms()
+                .into_iter()
+                .map(|t| {
                     let coeff: Rational = t.coeff * lcm;
                     debug_assert!(coeff.denom().is_one());
                     SparseMono::new(coeff.into_numer_denom().0, t.powers)
-                }
-            ).collect();
+                })
+                .collect();
             SparsePoly::from_raw_terms(terms)
         };
 

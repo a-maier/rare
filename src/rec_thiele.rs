@@ -1,4 +1,7 @@
-use std::{fmt::{self, Display}, ops::ControlFlow};
+use std::{
+    fmt::{self, Display},
+    ops::ControlFlow,
+};
 
 use ffnt::{TryDiv, Z64};
 use log::{debug, trace};
@@ -8,7 +11,8 @@ use crate::{
     dense_poly::DensePoly,
     rand::pt_iter,
     rat::Rat,
-    traits::{One, Rec, TryEval, WithVars, Zero}, sparse_poly::SparsePoly,
+    sparse_poly::SparsePoly,
+    traits::{One, Rec, TryEval, WithVars, Zero},
 };
 
 /// Univariate rational function reconstruction using Thiele interpolation
@@ -27,7 +31,6 @@ impl<const P: u64> Default for ThieleRec<P> {
     }
 }
 
-
 impl<const P: u64> ThieleRec<P> {
     pub fn new(extra_pts: usize) -> Self {
         Self {
@@ -39,11 +42,7 @@ impl<const P: u64> ThieleRec<P> {
         }
     }
 
-    pub fn add_pt(
-        &mut self,
-        y: Z64<P>,
-        q_y: Z64<P>
-    ) -> ControlFlow<()> {
+    pub fn add_pt(&mut self, y: Z64<P>, q_y: Z64<P>) -> ControlFlow<()> {
         trace!("Adding q({y}) = {q_y}");
         if !self.rec_started {
             self.rec_started = true;
@@ -62,17 +61,13 @@ impl<const P: u64> ThieleRec<P> {
             trace!("zero ({})", self.n_zeroes);
             if self.n_zeroes > self.extra_pts {
                 debug!("Reconstructed {}", self.rat);
-                return ControlFlow::Break(())
+                return ControlFlow::Break(());
             }
         };
         ControlFlow::Continue(())
     }
 
-    fn a_next(
-        &self,
-        y: Z64<P>,
-        f_y: Z64<P>,
-    ) -> Option<Z64<P>> {
+    fn a_next(&self, y: Z64<P>, f_y: Z64<P>) -> Option<Z64<P>> {
         let mut a = f_y;
         // TODO: check if calculating `a` with less divisions is faster
         for (ai, yi) in &self.rat.coeffs {
@@ -85,17 +80,14 @@ impl<const P: u64> ThieleRec<P> {
         self.rat
     }
 
-    pub fn rec_from_seq<I>(
-        mut self,
-        pts: I,
-    ) -> Option<ThieleRat<Z64<P>>>
+    pub fn rec_from_seq<I>(mut self, pts: I) -> Option<ThieleRat<Z64<P>>>
     where
         I: IntoIterator<Item = (Z64<P>, Z64<P>)>,
     {
         debug!("1d rational function reconstruction");
         for (y, q_y) in pts {
             if self.add_pt(y, q_y) == ControlFlow::Break(()) {
-                return Some(self.into_rat())
+                return Some(self.into_rat());
             }
         }
         debug!("Reconstruction failed");
@@ -126,10 +118,7 @@ impl<const P: u64> ThieleRec<P> {
         )
     }
 
-    pub fn rec_univariate<F>(
-        self,
-        poly: F,
-    ) -> Option<ThieleRat<Z64<P>>>
+    pub fn rec_univariate<F>(self, poly: F) -> Option<ThieleRat<Z64<P>>>
     where
         F: FnMut(Z64<P>) -> Option<Z64<P>>,
     {
@@ -313,7 +302,11 @@ where
 mod tests {
     use rand_xoshiro::rand_core::SeedableRng;
 
-    use crate::{dense_poly::DensePoly, traits::TryEval, _test_util::{gen_dense_rat1, sample_eq}};
+    use crate::{
+        _test_util::{gen_dense_rat1, sample_eq},
+        dense_poly::DensePoly,
+        traits::TryEval,
+    };
 
     use super::*;
 

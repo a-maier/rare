@@ -1,10 +1,7 @@
-use std::{
-    num::NonZeroUsize,
-    ops::ControlFlow
-};
+use std::{num::NonZeroUsize, ops::ControlFlow};
 
 use ffnt::Z64;
-use log::{error, debug, trace, warn};
+use log::{debug, error, trace, warn};
 use paste::paste;
 use rand::Rng;
 
@@ -16,7 +13,7 @@ use crate::{
     rec_thiele::ThieleRec,
     sparse_poly::{SparseMono, SparsePoly},
     traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
-    util::{ALL_VARS_Z, slice_start},
+    util::{slice_start, ALL_VARS_Z},
 };
 
 /// Multivariate rational function reconstruction over a finite field
@@ -42,7 +39,7 @@ pub enum ReconstructionStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Needed<const P: u64, const N: usize>{
+pub enum Needed<const P: u64, const N: usize> {
     Pt([Z64<P>; N]),
     Pts(Vec<[Z64<P>; N]>),
 }
@@ -490,7 +487,7 @@ macro_rules! impl_rat_rec_mod_recursive {
 impl_rat_rec_mod_recursive! {16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1}
 
 fn normalise_lowest_den_coeff_to_one<const P: u64>(
-    rat: Rat<DensePoly<Z64<P>>>
+    rat: Rat<DensePoly<Z64<P>>>,
 ) -> Rat<DensePoly<Z64<P>>> {
     let (mut num, mut den) = rat.into_num_den();
     let norm = den.coeff(0).inv();
@@ -630,14 +627,12 @@ macro_rules! impl_rec_with_ran {
 }
 
 impl<F, const P: u64> Rec<RatRecMod, [Z64<P>; 1]> for F
-where F: FnMut([Z64<P>; 1]) -> Option<Z64<P>> {
+where
+    F: FnMut([Z64<P>; 1]) -> Option<Z64<P>>,
+{
     type Output = Option<Rat<SparsePoly<Z64<P>, 1>>>;
 
-    fn rec_with_ran(
-        &mut self,
-        rec: RatRecMod,
-        rng: impl Rng
-    ) -> Self::Output {
+    fn rec_with_ran(&mut self, rec: RatRecMod, rng: impl Rng) -> Self::Output {
         let rec = ThieleRec::new(rec.extra_pts);
         rec.rec_univariate_with_ran(|x: Z64<P>| (self)([x]), rng)
             .map(|r| r.into())
@@ -645,14 +640,12 @@ where F: FnMut([Z64<P>; 1]) -> Option<Z64<P>> {
 }
 
 impl<F, const P: u64> Rec<RatRecMod, [[Z64<P>; 1]; 1]> for F
-where F: TryEval<[Z64<P>; 1], Output = Z64<P>> {
+where
+    F: TryEval<[Z64<P>; 1], Output = Z64<P>>,
+{
     type Output = Option<Rat<SparsePoly<Z64<P>, 1>>>;
 
-    fn rec_with_ran(
-        &mut self,
-        rec: RatRecMod,
-        rng: impl Rng
-    ) -> Self::Output {
+    fn rec_with_ran(&mut self, rec: RatRecMod, rng: impl Rng) -> Self::Output {
         (|x: [Z64<P>; 1]| self.try_eval(&x)).rec_with_ran(rec, rng)
     }
 }
@@ -708,7 +701,7 @@ mod tests {
 
         fn ran_coeff(mut rng: impl Rng) -> Z64<P> {
             let z = rng.gen_range(0..MAX_COEFF);
-            unsafe{ Z64::new_unchecked(z) }
+            unsafe { Z64::new_unchecked(z) }
         }
 
         for _ in 0..NTESTS {
@@ -815,7 +808,7 @@ mod tests {
 
         fn ran_coeff(mut rng: impl Rng) -> Z64<P> {
             let z = rng.gen_range(0..MAX_COEFF);
-            unsafe{ Z64::new_unchecked(z) }
+            unsafe { Z64::new_unchecked(z) }
         }
 
         for _ in 0..NTESTS {
@@ -871,7 +864,7 @@ mod tests {
 
         fn ran_coeff(mut rng: impl Rng) -> Z64<P> {
             let z = rng.gen_range(0..MAX_COEFF);
-            unsafe{ Z64::new_unchecked(z) }
+            unsafe { Z64::new_unchecked(z) }
         }
 
         for _ in 0..NTESTS {

@@ -2,11 +2,17 @@ use std::ops::ControlFlow;
 
 use ffnt::Z64;
 use log::debug;
+use paste::paste;
 use rug::Integer;
 use seq_macro::seq;
-use paste::paste;
 
-use crate::{traits::{TryEval, Zero}, rat::{Rat, NoneError}, sparse_poly::SparsePoly, rec_linear::{RecLinear, UnknownDegreeRec}, rec_rat::{FFRat, combine_crt_rat}};
+use crate::{
+    rat::{NoneError, Rat},
+    rec_linear::{RecLinear, UnknownDegreeRec},
+    rec_rat::{combine_crt_rat, FFRat},
+    sparse_poly::SparsePoly,
+    traits::{TryEval, Zero},
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Needed {
@@ -130,12 +136,12 @@ seq! {N in 2..=16 {
 
 #[cfg(test)]
 mod tests {
-    use ::rand::{Rng, SeedableRng};
     use super::*;
+    use ::rand::{Rng, SeedableRng};
 
     use crate::rec_rat::LARGE_PRIMES;
-    use rug::integer::Order;
     use crate::sparse_poly::SparseMono;
+    use rug::integer::Order;
 
     const NTESTS: usize = 100;
     const EXTRA_SAMPLES: usize = 10;
@@ -166,11 +172,13 @@ mod tests {
     fn rand_poly<const N: usize>(mut rng: impl Rng) -> SparsePoly<Integer, N> {
         let nterms = rng.gen_range(0..=MAX_TERMS);
         SparsePoly::from_terms(
-            (0..nterms).map(|_| rand_term(&mut rng)).collect()
+            (0..nterms).map(|_| rand_term(&mut rng)).collect(),
         )
     }
 
-    fn rand_rat<const N: usize>(mut rng: impl Rng) -> Rat<SparsePoly<Integer, N>> {
+    fn rand_rat<const N: usize>(
+        mut rng: impl Rng,
+    ) -> Rat<SparsePoly<Integer, N>> {
         let mut den = SparsePoly::zero();
         while den.is_zero() {
             den = rand_poly(&mut rng);
@@ -178,7 +186,6 @@ mod tests {
         let num = rand_poly(rng);
         Rat::from_num_den_unchecked(num, den)
     }
-
 
     seq!(NVARS in 2..=3 {
         paste! {

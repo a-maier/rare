@@ -15,7 +15,7 @@ use crate::{
 use crate::{
     rand::pt_iter,
     traits::{One, Rec, WithVars, Zero},
-    util::{ALL_VARS, slice_start},
+    util::{slice_start, ALL_VARS},
 };
 
 /// Univariate polynomial reconstruction using Newton interpolation
@@ -52,7 +52,7 @@ impl<const P: u64> NewtonPolyRec<P> {
         trace!("adding p({}) = {f_y}", y[0]);
         if let Some(y_last) = self.y_last {
             let Some(a) = self.next_a(y[0], f_y) else {
-                return ControlFlow::Continue(0)
+                return ControlFlow::Continue(0);
             };
             self.poly.coeffs.push((self.poly.a_last, y_last));
             self.poly.a_last = a;

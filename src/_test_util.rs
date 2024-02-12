@@ -1,17 +1,22 @@
 use std::iter::repeat_with;
 
 use ffnt::Z64;
-use rand::{Rng, distributions::Standard, prelude::Distribution};
 use paste::paste;
+use rand::{distributions::Standard, prelude::Distribution, Rng};
 use seq_macro::seq;
 
-use crate::{dense_poly::{DensePoly, DensePoly1}, rat::Rat, traits::{One, Zero, TryEval}, sparse_poly::{SparsePoly, SparseMono}};
+use crate::{
+    dense_poly::{DensePoly, DensePoly1},
+    rat::Rat,
+    sparse_poly::{SparseMono, SparsePoly},
+    traits::{One, TryEval, Zero},
+};
 
 // generate a random dense polynomial
 // the maximum power is 2^m - 1, where m is sampled uniformly between 0 and `n[0]`
 pub fn gen_dense_poly1<const P: u64>(
     n: &[u32; 1],
-    mut rng: impl Rng
+    mut rng: impl Rng,
 ) -> DensePoly<Z64<P>> {
     let max_pow = rng.gen_range(0..=n[0]);
     let nterms = 2usize.pow(max_pow);
@@ -43,7 +48,7 @@ macro_rules! impl_gen_recursive {
     }
 }
 
-impl_gen_recursive!(1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10);
+impl_gen_recursive!(1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10);
 
 seq!( N in 1..=10 {
     paste! {
@@ -73,21 +78,23 @@ seq!( N in 1..=10 {
 pub fn gen_sparse_poly<const P: u64, const N: usize>(
     n: u32,
     max_pow: u32,
-    mut rng: impl Rng
+    mut rng: impl Rng,
 ) -> SparsePoly<Z64<P>, N> {
     let nterms = 2usize.pow(rng.gen_range(0..=n));
-    let terms = repeat_with(|| gen_sparse_mono(max_pow, &mut rng)).take(nterms).collect();
+    let terms = repeat_with(|| gen_sparse_mono(max_pow, &mut rng))
+        .take(nterms)
+        .collect();
     SparsePoly::from_terms(terms)
 }
 
 pub fn gen_sparse_mono<const P: u64, const N: usize>(
     max_pow: u32,
-    mut rng: impl Rng
+    mut rng: impl Rng,
 ) -> SparseMono<Z64<P>, N> {
     let coeff = rng.gen_range(1..P);
-    let coeff = unsafe{ Z64::new_unchecked(coeff) };
+    let coeff = unsafe { Z64::new_unchecked(coeff) };
     let powers = [(); N].map(|_| rng.gen_range(0..=max_pow));
-    SparseMono{ powers, coeff }
+    SparseMono { powers, coeff }
 }
 
 // generate a random sparse rational function
@@ -95,7 +102,7 @@ pub fn gen_sparse_mono<const P: u64, const N: usize>(
 pub fn gen_sparse_rat<const P: u64, const N: usize>(
     n: u32,
     max_pow: u32,
-    mut rng: impl Rng
+    mut rng: impl Rng,
 ) -> Rat<SparsePoly<Z64<P>, N>> {
     let num = gen_sparse_poly(n, max_pow, &mut rng);
     let den = if num.is_zero() {
@@ -116,7 +123,8 @@ pub fn sample_eq<const N: usize, const P: u64>(
     rec: &impl TryEval<[Z64<P>; N], Output = Z64<P>>,
     mut rng: impl Rng,
 ) -> bool
-where Standard: Distribution<[Z64<P>; N]>
+where
+    Standard: Distribution<[Z64<P>; N]>,
 {
     const TESTS: usize = 10;
     for _ in 0..TESTS {

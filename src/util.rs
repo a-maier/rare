@@ -1,7 +1,7 @@
 use seq_macro::seq;
 
 pub(crate) fn slice_start<T, const N: usize, const M: usize>(
-    a: &[T; N]
+    a: &[T; N],
 ) -> &[T; M] {
     a[..M].try_into().unwrap()
 }

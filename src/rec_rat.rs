@@ -3,52 +3,135 @@ use std::ops::ControlFlow;
 use ffnt::Z64;
 use lazy_static::lazy_static;
 use log::{debug, trace, warn};
-use rand::Rng;
-use rug::{Integer, Rational, integer::IntegerExt64, ops::RemRounding};
-use seq_macro::seq;
 use paste::paste;
+use rand::Rng;
+use rug::{integer::IntegerExt64, ops::RemRounding, Integer, Rational};
+use seq_macro::seq;
 
-use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::{RatRecMod, self}, arr::Arr, rec_linear::RecLinear};
+use crate::{
+    arr::Arr,
+    rat::{NoneError, Rat},
+    rec_linear::RecLinear,
+    rec_rat_mod::{self, RatRecMod},
+    sparse_poly::{SparseMono, SparsePoly},
+    traits::{One, Rec, TryEval, Zero},
+};
 
 pub const LARGE_PRIMES: [u64; 114] = [
-    1152921504606846883, 1152921504606846869, 1152921504606846803,
-    1152921504606846797, 1152921504606846719, 1152921504606846697,
-    1152921504606846607, 1152921504606846581, 1152921504606846577,
-    1152921504606846523, 1152921504606846419, 1152921504606846397,
-    1152921504606846347, 1152921504606846307, 1152921504606846281,
-    1152921504606846269, 1152921504606846259, 1152921504606846251,
-    1152921504606846223, 1152921504606846199, 1152921504606846179,
-    1152921504606846097, 1152921504606846043, 1152921504606845993,
-    1152921504606845977, 1152921504606845849, 1152921504606845839,
-    1152921504606845789, 1152921504606845777, 1152921504606845683,
-    1152921504606845657, 1152921504606845647, 1152921504606845527,
-    1152921504606845503, 1152921504606845473, 1152921504606845471,
-    1152921504606845399, 1152921504606845387, 1152921504606845321,
-    1152921504606845317, 1152921504606845269, 1152921504606845213,
-    1152921504606845167, 1152921504606845161, 1152921504606845147,
-    1152921504606845101, 1152921504606845027, 1152921504606844957,
-    1152921504606844933, 1152921504606844913, 1152921504606844849,
-    1152921504606844829, 1152921504606844811, 1152921504606844787,
-    1152921504606844741, 1152921504606844717, 1152921504606844691,
-    1152921504606844591, 1152921504606844519, 1152921504606844513,
-    1152921504606844447, 1152921504606844417, 1152921504606844411,
-    1152921504606844289, 1152921504606844279, 1152921504606844267,
-    1152921504606844243, 1152921504606844177, 1152921504606844127,
-    1152921504606843871, 1152921504606843863, 1152921504606843779,
-    1152921504606843733, 1152921504606843731, 1152921504606843707,
-    1152921504606843703, 1152921504606843607, 1152921504606843547,
-    1152921504606843527, 1152921504606843493, 1152921504606843479,
-    1152921504606843431, 1152921504606843421, 1152921504606843371,
-    1152921504606843353, 1152921504606843347, 1152921504606843341,
-    1152921504606843313, 1152921504606843299, 1152921504606843259,
-    1152921504606843233, 1152921504606843227, 1152921504606843221,
-    1152921504606843199, 1152921504606843173, 1152921504606843163,
-    1152921504606843107, 1152921504606843073, 1152921504606843031,
-    1152921504606842989, 1152921504606842951, 1152921504606842911,
-    1152921504606842909, 1152921504606842833, 1152921504606842809,
-    1152921504606842791, 1152921504606842753, 1152921504606842731,
-    1152921504606842669, 1152921504606842651, 1152921504606842569,
-    1152921504606842527, 1152921504606842513, 1152921504606842491,
+    1152921504606846883,
+    1152921504606846869,
+    1152921504606846803,
+    1152921504606846797,
+    1152921504606846719,
+    1152921504606846697,
+    1152921504606846607,
+    1152921504606846581,
+    1152921504606846577,
+    1152921504606846523,
+    1152921504606846419,
+    1152921504606846397,
+    1152921504606846347,
+    1152921504606846307,
+    1152921504606846281,
+    1152921504606846269,
+    1152921504606846259,
+    1152921504606846251,
+    1152921504606846223,
+    1152921504606846199,
+    1152921504606846179,
+    1152921504606846097,
+    1152921504606846043,
+    1152921504606845993,
+    1152921504606845977,
+    1152921504606845849,
+    1152921504606845839,
+    1152921504606845789,
+    1152921504606845777,
+    1152921504606845683,
+    1152921504606845657,
+    1152921504606845647,
+    1152921504606845527,
+    1152921504606845503,
+    1152921504606845473,
+    1152921504606845471,
+    1152921504606845399,
+    1152921504606845387,
+    1152921504606845321,
+    1152921504606845317,
+    1152921504606845269,
+    1152921504606845213,
+    1152921504606845167,
+    1152921504606845161,
+    1152921504606845147,
+    1152921504606845101,
+    1152921504606845027,
+    1152921504606844957,
+    1152921504606844933,
+    1152921504606844913,
+    1152921504606844849,
+    1152921504606844829,
+    1152921504606844811,
+    1152921504606844787,
+    1152921504606844741,
+    1152921504606844717,
+    1152921504606844691,
+    1152921504606844591,
+    1152921504606844519,
+    1152921504606844513,
+    1152921504606844447,
+    1152921504606844417,
+    1152921504606844411,
+    1152921504606844289,
+    1152921504606844279,
+    1152921504606844267,
+    1152921504606844243,
+    1152921504606844177,
+    1152921504606844127,
+    1152921504606843871,
+    1152921504606843863,
+    1152921504606843779,
+    1152921504606843733,
+    1152921504606843731,
+    1152921504606843707,
+    1152921504606843703,
+    1152921504606843607,
+    1152921504606843547,
+    1152921504606843527,
+    1152921504606843493,
+    1152921504606843479,
+    1152921504606843431,
+    1152921504606843421,
+    1152921504606843371,
+    1152921504606843353,
+    1152921504606843347,
+    1152921504606843341,
+    1152921504606843313,
+    1152921504606843299,
+    1152921504606843259,
+    1152921504606843233,
+    1152921504606843227,
+    1152921504606843221,
+    1152921504606843199,
+    1152921504606843173,
+    1152921504606843163,
+    1152921504606843107,
+    1152921504606843073,
+    1152921504606843031,
+    1152921504606842989,
+    1152921504606842951,
+    1152921504606842911,
+    1152921504606842909,
+    1152921504606842833,
+    1152921504606842809,
+    1152921504606842791,
+    1152921504606842753,
+    1152921504606842731,
+    1152921504606842669,
+    1152921504606842651,
+    1152921504606842569,
+    1152921504606842527,
+    1152921504606842513,
+    1152921504606842491,
 ];
 
 seq!(N in 0..114 {
@@ -68,7 +151,7 @@ const fn large_prime_idx(p: u64) -> usize {
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct RatRec {
-    extra_pts: usize
+    extra_pts: usize,
 }
 
 impl RatRec {
@@ -99,10 +182,10 @@ impl From<rec_rat_mod::ReconstructionStatus> for ReconstructionStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Needed<const N: usize>{
+pub enum Needed<const N: usize> {
     Pt([Z64<P0>; N]),
     Pts(Vec<[Z64<P0>; N]>),
-    Any(usize)
+    Any(usize),
 }
 
 impl<const N: usize> From<rec_rat_mod::Needed<P0, N>> for Needed<N> {
@@ -114,7 +197,6 @@ impl<const N: usize> From<rec_rat_mod::Needed<P0, N>> for Needed<N> {
         }
     }
 }
-
 
 seq! {N in 2..=16 {
     paste! {
@@ -275,7 +357,11 @@ seq! {N in 2..=16 {
 
 impl<F, const N: usize> Rec<RatRec, [Integer; N]> for F
 where
-    F: Rec<RatRecMod, [[Z64<P0>; N]; 1], Output = Option<Rat<SparsePoly<Z64<P0>, N>>>>,
+    F: Rec<
+        RatRecMod,
+        [[Z64<P0>; N]; 1],
+        Output = Option<Rat<SparsePoly<Z64<P0>, N>>>,
+    >,
     F: TryEval<[Z64<P1>; N], Output = Z64<P1>>,
     F: TryEval<[Z64<P2>; N], Output = Z64<P2>>,
     F: TryEval<[Z64<P3>; N], Output = Z64<P3>>,
@@ -392,22 +478,19 @@ where
 {
     type Output = Option<Rat<SparsePoly<Integer, N>>>;
 
-    fn rec_with_ran(
-        &mut self,
-        rec: RatRec,
-        mut rng: impl Rng
-    ) -> Self::Output {
+    fn rec_with_ran(&mut self, rec: RatRec, mut rng: impl Rng) -> Self::Output {
         let rec_mod = RatRecMod::new(rec.extra_pts);
 
         debug!("Trying rational reconstruction over characteristic {P0}");
         let mod_rec = Rec::<RatRecMod, [[Z64<P0>; N]; 1]>::rec_with_ran(
-            self, rec_mod, &mut rng
+            self, rec_mod, &mut rng,
         )?;
         let ncoeff = mod_rec.num().len() + mod_rec.den().len() - 1;
         let mod_rec = normalise_coeff(mod_rec);
         debug!("Reconstructed {mod_rec}");
         let mut mod_rec = FFRat::from(mod_rec);
-        let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
+        let mut res: Result<Rat<SparsePoly<Integer, N>>, _> =
+            (&mod_rec).try_into();
 
         seq!( M in 1..114 {{
             const P: u64 = paste!{ [<P M>] };
@@ -444,10 +527,10 @@ where
 }
 
 fn normalise_coeff<const P: u64, const N: usize>(
-    rat: Rat<SparsePoly<Z64<P>, N>>
+    rat: Rat<SparsePoly<Z64<P>, N>>,
 ) -> Rat<SparsePoly<Z64<P>, N>> {
     let Some(term) = rat.num().terms().last() else {
-        return Zero::zero()
+        return Zero::zero();
     };
     let norm = term.coeff.inv();
     let (mut num, mut den) = rat.into_num_den();
@@ -458,7 +541,7 @@ fn normalise_coeff<const P: u64, const N: usize>(
 
 pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
     rat: FFRat<N>,
-    new_rat: Rat<SparsePoly<Z64<P>, N>>
+    new_rat: Rat<SparsePoly<Z64<P>, N>>,
 ) -> FFRat<N> {
     let (num, den) = rat.rat.into_num_den();
     let modulus = rat.modulus;
@@ -485,11 +568,7 @@ pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
     }
 }
 
-fn merge_crt<const P: u64>(
-    c: &mut Integer,
-    d: Z64<P>,
-    modulus: &Integer
-) {
+fn merge_crt<const P: u64>(c: &mut Integer, d: Z64<P>, modulus: &Integer) {
     // TODO: check that `p_idx` gets optimised out
     let p_idx = large_prime_idx(P);
     debug_assert!(p_idx >= 1);
@@ -519,10 +598,8 @@ lazy_static! {
         for i in 0..res.len() {
             n *= LARGE_PRIMES[i];
             let m = LARGE_PRIMES[i + 1];
-            let ExtendedGCDResult { gcd, bezout } = extended_gcd(
-                n.clone(),
-                Integer::from(m)
-            );
+            let ExtendedGCDResult { gcd, bezout } =
+                extended_gcd(n.clone(), Integer::from(m));
             debug_assert!(gcd.is_one());
             let [a, b] = bezout;
             debug_assert!((Integer::from(&a * &n) + &b * m).is_one());
@@ -536,30 +613,39 @@ lazy_static! {
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(crate) struct FFRat<const N: usize> {
     pub(crate) rat: Rat<SparsePoly<Integer, N>>,
-    pub(crate) modulus: Integer
+    pub(crate) modulus: Integer,
 }
 
-impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>> for FFRat<N> {
+impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>>
+    for FFRat<N>
+{
     fn from(source: Rat<SparsePoly<Z64<P>, N>>) -> Self {
         let rat = source.into();
-        Self { rat, modulus: P.into()}
+        Self {
+            rat,
+            modulus: P.into(),
+        }
     }
 }
 
-impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<SparsePoly<Rational, N>> {
+impl<'a, const N: usize> TryFrom<&'a FFRat<N>>
+    for Rat<SparsePoly<Rational, N>>
+{
     type Error = NoneError;
 
     fn try_from(source: &'a FFRat<N>) -> Result<Self, Self::Error> {
         let mut num = Vec::with_capacity(source.rat.num().len());
         for term in source.rat.num().terms() {
-            let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus).ok_or(NoneError{})?;
+            let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus)
+                .ok_or(NoneError {})?;
             num.push(SparseMono::new(rat_coeff, term.powers));
         }
         let num = SparsePoly::from_raw_terms(num);
 
         let mut den = Vec::with_capacity(source.rat.den().len());
         for term in source.rat.den().terms().iter() {
-            let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus).ok_or(NoneError{})?;
+            let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus)
+                .ok_or(NoneError {})?;
             den.push(SparseMono::new(rat_coeff, term.powers));
         }
         let den = SparsePoly::from_raw_terms(den);
@@ -572,9 +658,7 @@ impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<SparsePoly<Integer, N>> {
     type Error = NoneError;
 
     fn try_from(source: &'a FFRat<N>) -> Result<Self, Self::Error> {
-        Rat::<SparsePoly<Rational, N>>::try_from(source).map(
-            |r| r.into()
-        )
+        Rat::<SparsePoly<Rational, N>>::try_from(source).map(|r| r.into())
     }
 }
 
@@ -583,14 +667,19 @@ fn rat_reconstruct(coeff: &Integer, modulus: &Integer) -> Option<Rational> {
     let max_bound = Integer::from(modulus / 2);
     // TODO: make configurable
     let max_den = Integer::from(max_bound.root_64_ref(5));
-    wang_reconstruct(coeff.to_owned(), modulus.to_owned(), &(max_bound / &max_den), &max_den)
+    wang_reconstruct(
+        coeff.to_owned(),
+        modulus.to_owned(),
+        &(max_bound / &max_den),
+        &max_den,
+    )
 }
 
 fn wang_reconstruct(
     value: Integer,
     modulus: Integer,
     max_num: &Integer,
-    max_den: &Integer
+    max_den: &Integer,
 ) -> Option<Rational> {
     let mut v = Arr([modulus, Integer::zero()]);
     let mut w = Arr([value, Integer::one()]);
@@ -604,7 +693,7 @@ fn wang_reconstruct(
     }
     if &w[1] < max_den && w[0].clone().gcd(&w[1]) == 1 {
         let [num, den] = w.0;
-        Some(unsafe{ Rational::from_canonical(num, den) })
+        Some(unsafe { Rational::from_canonical(num, den) })
     } else {
         None
     }
@@ -678,11 +767,13 @@ mod tests {
     fn rand_poly<const N: usize>(mut rng: impl Rng) -> SparsePoly<Integer, N> {
         let nterms = rng.gen_range(0..=MAX_TERMS);
         SparsePoly::from_terms(
-            (0..nterms).map(|_| rand_term(&mut rng)).collect()
+            (0..nterms).map(|_| rand_term(&mut rng)).collect(),
         )
     }
 
-    fn rand_rat<const N: usize>(mut rng: impl Rng) -> Rat<SparsePoly<Integer, N>> {
+    fn rand_rat<const N: usize>(
+        mut rng: impl Rng,
+    ) -> Rat<SparsePoly<Integer, N>> {
         let mut den = SparsePoly::zero();
         while den.is_zero() {
             den = rand_poly(&mut rng);
@@ -804,5 +895,4 @@ mod tests {
             }
         }
     });
-
 }
