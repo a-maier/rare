@@ -13,4 +13,5 @@ pub mod traits;
 pub mod _test_util;
 mod arr;
 pub mod rec_rat;
+pub mod rec_rat_linear;
 mod util;

@@ -10,7 +10,7 @@ use paste::paste;
 
 use crate::{traits::{Rec, TryEval, Zero, One}, rat::{Rat, NoneError}, sparse_poly::{SparsePoly, SparseMono}, rec_rat_mod::{RatRecMod, self}, arr::Arr, rec_linear::RecLinear};
 
-const LARGE_PRIMES: [u64; 114] = [
+pub const LARGE_PRIMES: [u64; 114] = [
     1152921504606846883, 1152921504606846869, 1152921504606846803,
     1152921504606846797, 1152921504606846719, 1152921504606846697,
     1152921504606846607, 1152921504606846581, 1152921504606846577,
@@ -456,7 +456,7 @@ fn normalise_coeff<const P: u64, const N: usize>(
     Rat::from_num_den_unchecked(num, den)
 }
 
-fn combine_crt_rat<const P: u64, const N: usize>(
+pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
     rat: FFRat<N>,
     new_rat: Rat<SparsePoly<Z64<P>, N>>
 ) -> FFRat<N> {
@@ -534,9 +534,9 @@ lazy_static! {
 
 // rational function over finite characteristic that does not necessarily fit in a `Z64`
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct FFRat<const N: usize> {
-    rat: Rat<SparsePoly<Integer, N>>,
-    modulus: Integer
+pub(crate) struct FFRat<const N: usize> {
+    pub(crate) rat: Rat<SparsePoly<Integer, N>>,
+    pub(crate) modulus: Integer
 }
 
 impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>> for FFRat<N> {
