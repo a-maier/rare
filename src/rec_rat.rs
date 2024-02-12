@@ -262,14 +262,14 @@ seq! {N in 2..=16 {
                         let pts: &'a [_] = unsafe {
                             std::slice::from_raw_parts(pts.as_ptr() as _, pts.len())
                         };
-                        let res = match self.rec.add_pts(pts) {
+
+                        match self.rec.add_pts(pts) {
                             Continue(needed) => Continue(needed.into()),
                             Break(()) => {
                                 self.finish_first_mod_rec();
                                 self.ask_for_new_mod()
                             }
-                        };
-                        return res;
+                        }
                     },
                     Rat => self.rec_rat_mod_from_pts(pts),
                     Done => Break(()),
@@ -554,7 +554,7 @@ pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
     let new_den = new_den.into_terms();
 
     let terms = num.iter_mut().chain(den.iter_mut());
-    let new_terms = new_num.into_iter().chain(new_den.into_iter());
+    let new_terms = new_num.into_iter().chain(new_den);
     for (term, new_term) in terms.zip(new_terms) {
         debug_assert_eq!(term.powers, new_term.powers);
         merge_crt(&mut term.coeff, new_term.coeff, &modulus);

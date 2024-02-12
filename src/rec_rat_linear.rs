@@ -54,7 +54,7 @@ seq! {N in 2..=16 {
                 }
             }
 
-            pub fn add_pts<'a, const P: u64>(
+            pub fn add_pts<const P: u64>(
                 &mut self,
                 pts: &[([Z64<P>; N], Z64<P>)]
             ) -> ControlFlow<(), Needed> {

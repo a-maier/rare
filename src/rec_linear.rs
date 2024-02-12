@@ -86,7 +86,7 @@ where
     fn rec_linear(&self, pts: Pts) -> Option<Rat<SparsePoly<Z64<P>, N>>> {
         let pts = pts.into_iter();
         assert!(!self.den().is_empty());
-        if self.num().len() == 0 {
+        if self.num().is_empty() {
             return Some(Zero::zero());
         }
         let num_coeffs = self.num().len() + self.den().len();
