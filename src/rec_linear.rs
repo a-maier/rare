@@ -255,7 +255,7 @@ where
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct Unit {}
+pub(crate) struct Unit {}
 
 impl Zero for Unit {
     fn zero() -> Self {
@@ -269,7 +269,7 @@ impl Zero for Unit {
     }
 }
 
-const UNIT: Unit = Unit {};
+pub(crate) const UNIT: Unit = Unit {};
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct UnknownDegreeRec {
