@@ -621,13 +621,13 @@ fn max_pows_reached<T, const N: usize>(
     let mut num_pows = [0; N];
     for term in rat.num().terms().iter() {
         for i in 0..N {
-            num_pows[i] = max(term.powers[i], num_pows[i]);
+            num_pows[i] = max(term.powers[i] + 1, num_pows[i]);
         }
     }
     let mut den_pows = [0; N];
     for term in rat.den().terms().iter() {
         for i in 0..N {
-            den_pows[i] = max(term.powers[i], den_pows[i]);
+            den_pows[i] = max(term.powers[i] + 1, den_pows[i]);
         }
     }
     [num_pows, den_pows]
