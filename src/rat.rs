@@ -175,6 +175,23 @@ impl<'a, 'b, S: Display, const P: u64, const Z: usize> Display
     }
 }
 
+impl<'a, 'b, S: Display, const Z: usize> Display
+    for FmtRat<'a, 'b, SparsePoly<Integer, Z>, SparsePoly<Integer, Z>, S, Z>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.rat.is_zero() {
+            return write!(f, "0");
+        }
+        let rat = &self.rat;
+        write!(
+            f,
+            "({})/({})",
+            rat.num().with_vars(&self.var),
+            rat.den().with_vars(&self.var)
+        )
+    }
+}
+
 #[derive(
     Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Error,
 )]
