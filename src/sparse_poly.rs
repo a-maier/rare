@@ -972,6 +972,12 @@ impl<'a, 'b, V: Display, const Z: usize> Display
             if *p != 1 {
                 write!(f, "^{p}")?;
             }
+            for (v, p) in var_pows {
+                write!(f, "*{v}")?;
+                if *p != 1 {
+                    write!(f, "^{p}")?;
+                }
+            }
         } else {
             write!(f, "{}", self.m.coeff)?;
             if !self.m.is_one() && !self.m.is_zero() {
