@@ -553,9 +553,14 @@ pub fn rec_linear_from_pts<const N: usize>(
         return Err(MorePts{modulus, nexpected})
     }
     let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
+    let first_modulus = modulus;
 
+    // TODO: might be better to iterate over LARGE_PRIMES
     for (m, pts) in pts {
         use ControlFlow::*;
+        if *m == first_modulus {
+            continue;
+        }
         if let Break(res) = add_rec(&mut res, &mut mod_rec, pts, *m, extra_pts)? {
             return res;
         }
