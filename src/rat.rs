@@ -94,15 +94,15 @@ where
     }
 }
 
-impl<'a, 'b, N, D, S: Display> WithVars<'a, &'b [S; 1]> for Rat<N, D>
+impl<'a, 'b, N, D, S: Display, const Z: usize> WithVars<'a, &'b [S; Z]> for Rat<N, D>
 where
-    N: Display + One + Zero + 'a,
-    D: Display + One + Zero + 'a,
+    N: WithVars<'a, &'b [S; Z]> + 'a,
+    D: WithVars<'a, &'b [S; Z]> + 'a,
 {
-    type Output = FmtUniRat<'a, 'b, N, D, S>;
+    type Output = FmtRat<'a, 'b, N, D, S, Z>;
 
-    fn with_vars(&'a self, vars: &'b [S; 1]) -> Self::Output {
-        FmtUniRat::new(self, vars)
+    fn with_vars(&'a self, vars: &'b [S; Z]) -> Self::Output {
+        FmtRat::new(self, vars)
     }
 }
 
@@ -121,27 +121,27 @@ where
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct FmtUniRat<'a, 'b, N, D, V: Display>
+pub struct FmtRat<'a, 'b, N, D, S: Display, const Z: usize>
 where
-    N: Display + One + Zero,
-    D: Display + One + Zero,
+    N: WithVars<'a, &'b [S; Z]> + 'a,
+    D: WithVars<'a, &'b [S; Z]> + 'a,
 {
     rat: &'a Rat<N, D>,
-    var: &'b [V],
+    var: &'b [S; Z],
 }
 
-impl<'a, 'b, N, D, V: Display> FmtUniRat<'a, 'b, N, D, V>
+impl<'a, 'b, N, D, S: Display, const Z: usize> FmtRat<'a, 'b, N, D, S, Z>
 where
-    N: Display + One + Zero,
-    D: Display + One + Zero,
+    N: WithVars<'a, &'b [S; Z]> + 'a,
+    D: WithVars<'a, &'b [S; Z]> + 'a,
 {
-    fn new(rat: &'a Rat<N, D>, var: &'b [V]) -> Self {
+    fn new(rat: &'a Rat<N, D>, var: &'b [S; Z]) -> Self {
         Self { rat, var }
     }
 }
 
-impl<'a, 'b, V: Display, const P: u64> Display
-    for FmtUniRat<'a, 'b, DensePoly<Z64<P>>, DensePoly<Z64<P>>, V>
+impl<'a, 'b, S: Display, const P: u64> Display
+    for FmtRat<'a, 'b, DensePoly<Z64<P>>, DensePoly<Z64<P>>, S, 1>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.rat.is_zero() {
@@ -154,6 +154,23 @@ impl<'a, 'b, V: Display, const P: u64> Display
             "({})/({})",
             rat.num().with_vars(var),
             rat.den().with_vars(var)
+        )
+    }
+}
+
+impl<'a, 'b, S: Display, const P: u64, const Z: usize> Display
+    for FmtRat<'a, 'b, SparsePoly<Z64<P>, Z>, SparsePoly<Z64<P>, Z>, S, Z>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.rat.is_zero() {
+            return write!(f, "0");
+        }
+        let rat = &self.rat;
+        write!(
+            f,
+            "({})/({})",
+            rat.num().with_vars(&self.var),
+            rat.den().with_vars(&self.var)
         )
     }
 }
