@@ -959,14 +959,27 @@ impl<'a, 'b, V: Display, const Z: usize> Display
     for FmtSparseMono<'a, 'b, V, Integer, Z>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.m.coeff)?;
-        if !self.m.is_one() && !self.m.is_zero() {
-            debug_assert_eq!(self.m.powers.len(), self.vars.len());
-            for (p, v) in self.m.powers.iter().zip(self.vars.iter()) {
-                match p {
-                    0 => {}
-                    1 => write!(f, "*{v}")?,
-                    _ => write!(f, "*{v}^{p}")?,
+        debug_assert_eq!(self.m.powers.len(), self.vars.len());
+        let var_pows = self.vars.iter()
+            .zip(self.m.powers.iter())
+            .filter(|(_, p)| **p > 0);
+        // omit coefficient if it's 1 and there are variables.
+        // TODO: similar for -1
+        if self.m.coeff.is_one() && self.m.powers.iter().any(|p| !p.is_zero()) {
+            let mut var_pows = var_pows;
+            let (v, p) = var_pows.next().unwrap();
+            write!(f, "{v}")?;
+            if *p != 1 {
+                write!(f, "^{p}")?;
+            }
+        } else {
+            write!(f, "{}", self.m.coeff)?;
+            if !self.m.is_one() && !self.m.is_zero() {
+                for (v, p) in var_pows {
+                    write!(f, "*{v}")?;
+                    if *p != 1 {
+                        write!(f, "^{p}")?;
+                    }
                 }
             }
         }
