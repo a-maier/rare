@@ -94,8 +94,6 @@ where
         debug!("Reconstructing with {neqs} equations");
 
         // construct equations num(x) - q(x) * den(x) from known points x, q(x)
-        // by convention the coefficient of the highest-order monomial in
-        // the numerator is set to one
         let mut eqs = Vec::with_capacity(neqs * num_coeffs);
         for (x, q_x) in pts.take(neqs) {
             for term in self.den().terms() {
@@ -104,6 +102,10 @@ where
             for term in self.num().terms() {
                 eqs.push(eval_pow(term, &x));
             }
+        }
+        if eqs.len() < neqs * num_coeffs {
+            // we don't have enough actual equations to get a meaningful result
+            return None;
         }
         let (den_coeffs, num_coeffs) = solve_eqs(neqs, eqs, self.den().len())?;
         let num = num_coeffs
