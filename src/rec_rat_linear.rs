@@ -486,10 +486,10 @@ pub enum FailedRec<const N: usize> {
         args: [u64; N],
         ncoord: usize,
     },
-    #[error("Need more points in characteristic {modulus}. Estimated total number: {nexpected}")]
+    #[error("Need more points in characteristic {modulus}. Estimated total number: {}", nexpected_to_string(*.nexpected))]
     MorePts{
         modulus: u64,
-        nexpected: usize,
+        nexpected: Option<usize>,
     },
     #[error("Need approximately {0} points in new characteristic")]
     MoreMods(usize),
@@ -513,6 +513,16 @@ fn format_args<const N: usize>(
     let mut res = args.map(|a| a.to_string());
     res[ncoord] = "x".to_string();
     res
+}
+
+fn nexpected_to_string(
+    n: Option<usize>
+) -> String {
+    if let Some(n) = n {
+        n.to_string()
+    } else {
+        "unknown".to_string()
+    }
 }
 
 pub fn rec_linear_from_pts<const N: usize>(
@@ -546,11 +556,11 @@ pub fn rec_linear_from_pts<const N: usize>(
     let modulus = *modulus;
     let Some(mut mod_rec) = rec_with_pows(most_pts, modulus, num_pows, den_pows)? else {
         debug!("Reconstruction over mod {modulus} failed");
-        return Err(MorePts{modulus, nexpected})
+        return Err(MorePts{modulus, nexpected: Some(nexpected)})
     };
     if max_pows_reached(&mod_rec.rat) != [num_pows, den_pows] {
         debug!("Reconstruction over mod {modulus} did not reach powers {num_pows:?}, {den_pows:?}");
-        return Err(MorePts{modulus, nexpected})
+        return Err(MorePts{modulus, nexpected: None})
     }
     let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
     let first_modulus = modulus;
@@ -611,9 +621,14 @@ fn add_rec_mod<const P: u64, const N: usize>(
     debug!("Trying rational reconstruction over characteristic {P}");
     let Some(next_mod_rec) = rat.rat.rec_linear(pts.iter().copied()) else {
         let nexpected = rat.rat.num().len() + rat.rat.den().len() - 1;
-        return Break(Err(FailedRec::MorePts { modulus: P, nexpected }))
+        return Break(Err(FailedRec::MorePts { modulus: P, nexpected: Some(nexpected) }))
     };
     debug!("Reconstructed {next_mod_rec}");
+    let [num_pows, den_pows] = max_pows_reached(&rat.rat);
+    if max_pows_reached(&next_mod_rec) != [num_pows, den_pows] {
+        debug!("Reconstruction over mod {P} did not reach powers {num_pows:?}, {den_pows:?}");
+        return Break(Err(FailedRec::MorePts{modulus: P, nexpected: None}))
+    }
     *rat = combine_crt_rat(std::mem::take(rat), next_mod_rec);
     *res  = (&*rat).try_into();
     Continue(())
