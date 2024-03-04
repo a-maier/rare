@@ -1,7 +1,6 @@
 use std::ops::ControlFlow;
 
 use ffnt::Z64;
-use lazy_static::lazy_static;
 use log::{debug, trace, warn};
 use paste::paste;
 use rand::Rng;
@@ -137,17 +136,6 @@ pub const LARGE_PRIMES: [u64; 114] = [
 seq!(N in 0..114 {
     paste! { const [<P N>]: u64 = LARGE_PRIMES[N]; }
 });
-
-const fn large_prime_idx(p: u64) -> usize {
-    let mut i = 0;
-    while LARGE_PRIMES[i] != p {
-        i += 1;
-        if i >= LARGE_PRIMES.len() {
-            panic!("Argument is not a large prime");
-        }
-    }
-    i
-}
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct RatRec {
@@ -569,44 +557,23 @@ pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
 }
 
 fn merge_crt<const P: u64>(c: &mut Integer, d: Z64<P>, modulus: &Integer) {
-    // TODO: check that `p_idx` gets optimised out
-    let p_idx = large_prime_idx(P);
-    debug_assert!(p_idx >= 1);
+    // Terms [a, b] in Bézout's identity a * N + b * M = 1 for coprime N, M
+    let ExtendedGCDResult { gcd, bezout } =
+        extended_gcd(modulus.clone(), Integer::from(P));
+    debug_assert!(gcd.is_one());
+    let [a, b] = bezout;
+    debug_assert!((Integer::from(&a * modulus) + &b * P).is_one());
+    //  x % N = c
+    //  x % M = d
+    // has the solution x = c - (c - d) * a * N
     let shift = Integer::from(&*c - u64::from(d));
-    *c -= shift * &BEZOUT[p_idx - 1];
+    *c -= shift * a * modulus;
     if c.is_negative() {
         let new_mod = Integer::from(P * modulus);
         *c = std::mem::take(c).rem_euc(new_mod);
     }
     debug_assert!(!c.is_negative());
     debug_assert_eq!(c.mod_u64(P), u64::from(d));
-}
-
-// Terms a * N in Bézout's identity a * N + b * M = 1 for coprime N, M
-// in BEZOUT[i] the variables are
-// M = LARGE_PRIMES[i + 1]
-// N = LARGE_PRIMES[0] * ... * LARGE_PRIMES[i]
-// These are exactly the terms required for the Chinese Remainder Theorem
-// namely
-//  x % N = c
-//  x % M = d
-// has the solution x = c - (c - d) * a * N
-lazy_static! {
-    static ref BEZOUT: [Integer; 113] = {
-        let mut res = [(); 113].map(|_| Default::default());
-        let mut n = Integer::one();
-        for i in 0..res.len() {
-            n *= LARGE_PRIMES[i];
-            let m = LARGE_PRIMES[i + 1];
-            let ExtendedGCDResult { gcd, bezout } =
-                extended_gcd(n.clone(), Integer::from(m));
-            debug_assert!(gcd.is_one());
-            let [a, b] = bezout;
-            debug_assert!((Integer::from(&a * &n) + &b * m).is_one());
-            res[i] = a * &n;
-        }
-        res
-    };
 }
 
 // rational function over finite characteristic that does not necessarily fit in a `Z64`
