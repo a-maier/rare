@@ -476,7 +476,7 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FailedRec<const N: usize> {
     #[error("Need points for reconstruction")]
     Empty,
