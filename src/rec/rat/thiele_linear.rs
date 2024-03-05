@@ -226,6 +226,11 @@ impl<const P: u64, const N: usize> Rec<P, N> {
     pub fn extra_pts(&self) -> usize {
         self.extra_pts
     }
+
+    /// The current modulus
+    pub fn modulus(&self) -> &Integer {
+        &self.rat.modulus
+    }
 }
 
 fn nterms_with_max_pows<const N: usize>(
