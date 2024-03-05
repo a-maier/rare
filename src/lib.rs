@@ -25,3 +25,7 @@ pub mod dense_poly;
 pub mod sparse_poly;
 #[deprecated]
 pub mod rat;
+
+
+pub use ffnt::Z64;
+pub use rug::Integer;
