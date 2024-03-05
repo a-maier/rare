@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     arr::Arr,
     dense_poly::DensePoly,
-    sparse_poly::{SparseMono, SparsePoly},
+    sparse_poly::{FlatMono, FlatPoly},
     traits::{One, TryEval, WithVars, Zero},
 };
 
@@ -159,7 +159,7 @@ impl<'a, 'b, S: Display, const P: u64> Display
 }
 
 impl<'a, 'b, S: Display, const P: u64, const Z: usize> Display
-    for FmtRat<'a, 'b, SparsePoly<Z64<P>, Z>, SparsePoly<Z64<P>, Z>, S, Z>
+    for FmtRat<'a, 'b, FlatPoly<Z64<P>, Z>, FlatPoly<Z64<P>, Z>, S, Z>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.rat.is_zero() {
@@ -176,7 +176,7 @@ impl<'a, 'b, S: Display, const P: u64, const Z: usize> Display
 }
 
 impl<'a, 'b, S: Display, const Z: usize> Display
-    for FmtRat<'a, 'b, SparsePoly<Integer, Z>, SparsePoly<Integer, Z>, S, Z>
+    for FmtRat<'a, 'b, FlatPoly<Integer, Z>, FlatPoly<Integer, Z>, S, Z>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.rat.is_zero() {
@@ -245,19 +245,19 @@ fn gcd(mut a: i64, mut b: i64) -> i64 {
     a
 }
 
-impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>>
-    for Rat<SparsePoly<Integer, N>>
+impl<const P: u64, const N: usize> From<Rat<FlatPoly<Z64<P>, N>>>
+    for Rat<FlatPoly<Integer, N>>
 {
-    fn from(rat: Rat<SparsePoly<Z64<P>, N>>) -> Self {
+    fn from(rat: Rat<FlatPoly<Z64<P>, N>>) -> Self {
         let (num, den) = rat.into_num_den();
         Rat::from_num_den_unchecked(num.into(), den.into())
     }
 }
 
-impl<const N: usize> From<Rat<SparsePoly<Rational, N>>>
-    for Rat<SparsePoly<Integer, N>>
+impl<const N: usize> From<Rat<FlatPoly<Rational, N>>>
+    for Rat<FlatPoly<Integer, N>>
 {
-    fn from(rat: Rat<SparsePoly<Rational, N>>) -> Self {
+    fn from(rat: Rat<FlatPoly<Rational, N>>) -> Self {
         let (num, den) = rat.into_num_den();
 
         let mut lcm = Integer::one();
@@ -272,17 +272,17 @@ impl<const N: usize> From<Rat<SparsePoly<Rational, N>>>
             lcm.neg_assign()
         }
 
-        let to_int = |p: SparsePoly<Rational, N>, lcm| {
+        let to_int = |p: FlatPoly<Rational, N>, lcm| {
             let terms = p
                 .into_terms()
                 .into_iter()
                 .map(|t| {
                     let coeff: Rational = t.coeff * lcm;
                     debug_assert!(coeff.denom().is_one());
-                    SparseMono::new(coeff.into_numer_denom().0, t.powers)
+                    FlatMono::new(coeff.into_numer_denom().0, t.powers)
                 })
                 .collect();
-            SparsePoly::from_raw_terms(terms)
+            FlatPoly::from_raw_terms(terms)
         };
 
         let num = to_int(num, &lcm);

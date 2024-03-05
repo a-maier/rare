@@ -10,7 +10,7 @@ use itertools::Itertools;
 use paste::paste;
 
 use crate::{
-    sparse_poly::{SparseMono, SparsePoly},
+    sparse_poly::{FlatMono, FlatPoly},
     traits::{Eval, One, Shift, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS},
 };
@@ -459,8 +459,8 @@ impl<T: Zero> From<T> for DensePoly<T> {
     }
 }
 
-impl<T: Zero> From<SparsePoly<T, 1>> for DensePoly<T> {
-    fn from(p: SparsePoly<T, 1>) -> Self {
+impl<T: Zero> From<FlatPoly<T, 1>> for DensePoly<T> {
+    fn from(p: FlatPoly<T, 1>) -> Self {
         let orig_coeff = p.into_terms();
         if let Some(max_pow) = orig_coeff.last().map(|c| c.powers[0]) {
             let mut coeff = Vec::from_iter(
@@ -476,8 +476,8 @@ impl<T: Zero> From<SparsePoly<T, 1>> for DensePoly<T> {
     }
 }
 
-impl<T: Zero> From<SparseMono<T, 1>> for DensePoly<T> {
-    fn from(m: SparseMono<T, 1>) -> Self {
+impl<T: Zero> From<FlatMono<T, 1>> for DensePoly<T> {
+    fn from(m: FlatMono<T, 1>) -> Self {
         let mut coeff = Vec::from_iter(
             std::iter::repeat_with(|| T::zero()).take(1 + m.powers[0] as usize),
         );
@@ -640,8 +640,8 @@ macro_rules! impl_dense_poly_recursive {
                     }
                 }
 
-                impl<T: AddAssign + Zero> From<SparsePoly<T, $x>> for [<DensePoly $x>]<T> {
-                    fn from(p: SparsePoly<T, $x>) -> Self {
+                impl<T: AddAssign + Zero> From<FlatPoly<T, $x>> for [<DensePoly $x>]<T> {
+                    fn from(p: FlatPoly<T, $x>) -> Self {
                         let orig_coeff = p.into_terms();
                         if let Some(max_pow) = orig_coeff.last().map(|c| c.powers[0]) {
                             let mut res_coeff = Vec::from_iter(
@@ -650,8 +650,8 @@ macro_rules! impl_dense_poly_recursive {
                             // TODO: this is not very efficient (lots of allocations)
                             // it's probably better to try and convert all monomials
                             // with the same power[0] at once.
-                            for SparseMono{coeff, powers} in orig_coeff {
-                                let rest = SparseMono::new(
+                            for FlatMono{coeff, powers} in orig_coeff {
+                                let rest = FlatMono::new(
                                     coeff,
                                     powers[1..].try_into().unwrap()
                                 );
@@ -664,11 +664,11 @@ macro_rules! impl_dense_poly_recursive {
                     }
                 }
 
-                impl<T: Zero> From<SparseMono<T, $x>> for [<DensePoly $x>]<T> {
-                    fn from(m: SparseMono<T, $x>) -> Self {
+                impl<T: Zero> From<FlatMono<T, $x>> for [<DensePoly $x>]<T> {
+                    fn from(m: FlatMono<T, $x>) -> Self {
                         let (&pow, rest) = m.powers.split_first().unwrap();
                         let rest: [u32; $y] = rest.try_into().unwrap();
-                        let rest = SparseMono::new(m.coeff, rest);
+                        let rest = FlatMono::new(m.coeff, rest);
                         let mut res_coeff = Vec::from_iter(
                             std::iter::repeat_with(|| Zero::zero()).take(1 + pow as usize)
                         );

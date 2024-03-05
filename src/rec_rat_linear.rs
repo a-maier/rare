@@ -12,7 +12,7 @@ use crate::{
     rat::{NoneError, Rat},
     rec_linear::{RecLinear, UNIT, Unit},
     rec_rat::{combine_crt_rat, FFRat, LARGE_PRIMES},
-    sparse_poly::{SparsePoly, SparseMono},
+    sparse_poly::{FlatPoly, FlatMono},
     traits::{TryEval, One, Zero, Rec}, rec_thiele::ThieleRec, dense_poly::DensePoly,
 };
 
@@ -54,7 +54,7 @@ seq! {N in 2..=16 {
             powers: [[u32; 2]; N],
             next_needed_pow: usize,
             rat: FFRat<N>,
-            res: Result<Rat<SparsePoly<Integer, N>>, NoneError>,
+            res: Result<Rat<FlatPoly<Integer, N>>, NoneError>,
             done: bool,
         }
 
@@ -241,7 +241,7 @@ seq! {N in 2..=16 {
                 *z
             }
 
-            pub fn into_rat(self) -> Option<Rat<SparsePoly<Integer, N>>> {
+            pub fn into_rat(self) -> Option<Rat<FlatPoly<Integer, N>>> {
                 self.res.ok()
             }
 
@@ -258,7 +258,7 @@ fn nterms_with_max_pows<const N: usize>(
     max_pows.iter().map(|&n| n as usize).product()
 }
 
-fn gen_poly_with_max_pows<const N: usize>(max_pows: [u32; N]) -> SparsePoly<Unit, N> {
+fn gen_poly_with_max_pows<const N: usize>(max_pows: [u32; N]) -> FlatPoly<Unit, N> {
     let num_terms = nterms_with_max_pows(max_pows);
     let mut terms = Vec::with_capacity(num_terms);
     for mut i in 0..(num_terms as u32) {
@@ -267,12 +267,12 @@ fn gen_poly_with_max_pows<const N: usize>(max_pows: [u32; N]) -> SparsePoly<Unit
             *pow = i % *max;
             i /= max;
         }
-        terms.push(SparseMono::new(UNIT, pows));
+        terms.push(FlatMono::new(UNIT, pows));
     }
     // TODO: would be better to generate them in the
     // correct order instead of sorting
     terms.sort_unstable();
-    SparsePoly::from_raw_terms(terms)
+    FlatPoly::from_raw_terms(terms)
 }
 
 seq!(N in 0..114 {
@@ -396,7 +396,7 @@ where
     F: TryEval<[Z64<P112>; N], Output = Z64<P112>>,
     F: TryEval<[Z64<P113>; N], Output = Z64<P113>>,
 {
-    type Output = Option<Rat<SparsePoly<Integer, N>>>;
+    type Output = Option<Rat<FlatPoly<Integer, N>>>;
 
     fn rec_with_ran(&mut self, rec: RatRecLinear, mut rng: impl Rng) -> Self::Output {
         let z: [Z64<P0>; N] = [(); N].map(|_| rng.gen());
@@ -440,7 +440,7 @@ where
         // TODO: code duplication with `Rec<RatRec, [Integer; N]> for F`
         debug!("Reconstructed {mod_rec}");
         let mut mod_rec = FFRat::from(mod_rec);
-        let mut res: Result<Rat<SparsePoly<Integer, N>>, _> =
+        let mut res: Result<Rat<FlatPoly<Integer, N>>, _> =
             (&mod_rec).try_into();
 
         seq!( M in 1..114 {{
@@ -528,7 +528,7 @@ fn nexpected_to_string(
 pub fn rec_linear_from_pts<const N: usize>(
     pts: &mut [(u64, Vec<([u64; N], u64)>)],
     extra_pts: usize,
-) -> Result<Rat<SparsePoly<Integer, N>>, FailedRec<N>>
+) -> Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>>
 {
     use FailedRec::*;
     if pts.is_empty() {
@@ -562,7 +562,7 @@ pub fn rec_linear_from_pts<const N: usize>(
         debug!("Reconstruction over mod {modulus} did not reach powers {num_pows:?}, {den_pows:?}");
         return Err(MorePts{modulus, nexpected: None})
     }
-    let mut res: Result<Rat<SparsePoly<Integer, N>>, _> = (&mod_rec).try_into();
+    let mut res: Result<Rat<FlatPoly<Integer, N>>, _> = (&mod_rec).try_into();
     let first_modulus = modulus;
 
     // TODO: might be better to iterate over LARGE_PRIMES
@@ -580,12 +580,12 @@ pub fn rec_linear_from_pts<const N: usize>(
 }
 
 fn add_rec<'a, const N: usize>(
-    res: &mut Result<Rat<SparsePoly<Integer, N>>, NoneError>,
+    res: &mut Result<Rat<FlatPoly<Integer, N>>, NoneError>,
     rat: &mut FFRat<N>,
     pts: &'a [([u64; N], u64)],
     modulus: u64,
     extra_pts: usize
-) -> Result<ControlFlow<Result<Rat<SparsePoly<Integer, N>>, FailedRec<N>>>, UnknownMod> {
+) -> Result<ControlFlow<Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>>>, UnknownMod> {
     seq!{ Q in 0..114 {
           if modulus == LARGE_PRIMES[Q] {
               const P: u64 = LARGE_PRIMES[Q];
@@ -599,11 +599,11 @@ fn add_rec<'a, const N: usize>(
 }
 
 fn add_rec_mod<const P: u64, const N: usize>(
-    res: &mut Result<Rat<SparsePoly<Integer, N>>, NoneError>,
+    res: &mut Result<Rat<FlatPoly<Integer, N>>, NoneError>,
     rat: &mut FFRat<N>,
     pts: &[([Z64<P>; N], Z64<P>)],
     extra_pts: usize
-) -> ControlFlow<Result<Rat<SparsePoly<Integer, N>>, FailedRec<N>>> {
+) -> ControlFlow<Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>>> {
     use ControlFlow::*;
     // if we can already reproduce the points we are done
     if let Ok(res_ref) = res.as_ref() {
@@ -635,7 +635,7 @@ fn add_rec_mod<const P: u64, const N: usize>(
 }
 
 fn max_pows_reached<T, const N: usize>(
-    rat: &Rat<SparsePoly<T, N>>,
+    rat: &Rat<FlatPoly<T, N>>,
 ) -> [[u32; N]; 2] {
     use std::cmp::max;
     let mut num_pows = [0; N];
@@ -771,7 +771,7 @@ mod tests {
     use ::rand::{Rng, SeedableRng};
 
     use crate::rec_rat::LARGE_PRIMES;
-    use crate::sparse_poly::SparseMono;
+    use crate::sparse_poly::FlatMono;
     use crate::traits::Zero;
     use rug::integer::Order;
 
@@ -796,22 +796,22 @@ mod tests {
         }
     }
 
-    fn rand_term<const N: usize>(mut rng: impl Rng) -> SparseMono<Integer, N> {
+    fn rand_term<const N: usize>(mut rng: impl Rng) -> FlatMono<Integer, N> {
         let pow = [(); N].map(|_| rng.gen_range(0..=MAX_POW));
-        SparseMono::new(rand_int(rng), pow)
+        FlatMono::new(rand_int(rng), pow)
     }
 
-    fn rand_poly<const N: usize>(mut rng: impl Rng) -> SparsePoly<Integer, N> {
+    fn rand_poly<const N: usize>(mut rng: impl Rng) -> FlatPoly<Integer, N> {
         let nterms = rng.gen_range(0..=MAX_TERMS);
-        SparsePoly::from_terms(
+        FlatPoly::from_terms(
             (0..nterms).map(|_| rand_term(&mut rng)).collect(),
         )
     }
 
     fn rand_rat<const N: usize>(
         mut rng: impl Rng,
-    ) -> Rat<SparsePoly<Integer, N>> {
-        let mut den = SparsePoly::zero();
+    ) -> Rat<FlatPoly<Integer, N>> {
+        let mut den = FlatPoly::zero();
         while den.is_zero() {
             den = rand_poly(&mut rng);
         }

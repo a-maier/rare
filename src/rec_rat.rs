@@ -12,7 +12,7 @@ use crate::{
     rat::{NoneError, Rat},
     rec_linear::RecLinear,
     rec_rat_mod::{self, RatRecMod},
-    sparse_poly::{SparseMono, SparsePoly},
+    sparse_poly::{FlatMono, FlatPoly},
     traits::{One, Rec, TryEval, Zero},
 };
 
@@ -194,7 +194,7 @@ seq! {N in 2..=16 {
         pub struct [<RatRec N>] {
             rec: [<RatRecMod N>]<P0>,
             rat: FFRat<N>,
-            res: Result<Rat<SparsePoly<Integer, N>>, NoneError>,
+            res: Result<Rat<FlatPoly<Integer, N>>, NoneError>,
             extra_pts: usize,
             done: bool,
         }
@@ -336,7 +336,7 @@ seq! {N in 2..=16 {
                 self.rec.request_next_arg(bad_z)
             }
 
-            pub fn into_rat(self) -> Option<Rat<SparsePoly<Integer, N>>> {
+            pub fn into_rat(self) -> Option<Rat<FlatPoly<Integer, N>>> {
                 self.res.ok()
             }
         }
@@ -348,7 +348,7 @@ where
     F: Rec<
         RatRecMod,
         [[Z64<P0>; N]; 1],
-        Output = Option<Rat<SparsePoly<Z64<P0>, N>>>,
+        Output = Option<Rat<FlatPoly<Z64<P0>, N>>>,
     >,
     F: TryEval<[Z64<P1>; N], Output = Z64<P1>>,
     F: TryEval<[Z64<P2>; N], Output = Z64<P2>>,
@@ -464,7 +464,7 @@ where
     F: TryEval<[Z64<P112>; N], Output = Z64<P112>>,
     F: TryEval<[Z64<P113>; N], Output = Z64<P113>>,
 {
-    type Output = Option<Rat<SparsePoly<Integer, N>>>;
+    type Output = Option<Rat<FlatPoly<Integer, N>>>;
 
     fn rec_with_ran(&mut self, rec: RatRec, mut rng: impl Rng) -> Self::Output {
         let rec_mod = RatRecMod::new(rec.extra_pts);
@@ -477,7 +477,7 @@ where
         let mod_rec = normalise_coeff(mod_rec);
         debug!("Reconstructed {mod_rec}");
         let mut mod_rec = FFRat::from(mod_rec);
-        let mut res: Result<Rat<SparsePoly<Integer, N>>, _> =
+        let mut res: Result<Rat<FlatPoly<Integer, N>>, _> =
             (&mod_rec).try_into();
 
         seq!( M in 1..114 {{
@@ -515,8 +515,8 @@ where
 }
 
 fn normalise_coeff<const P: u64, const N: usize>(
-    rat: Rat<SparsePoly<Z64<P>, N>>,
-) -> Rat<SparsePoly<Z64<P>, N>> {
+    rat: Rat<FlatPoly<Z64<P>, N>>,
+) -> Rat<FlatPoly<Z64<P>, N>> {
     let Some(term) = rat.num().terms().last() else {
         return Zero::zero();
     };
@@ -529,7 +529,7 @@ fn normalise_coeff<const P: u64, const N: usize>(
 
 pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
     rat: FFRat<N>,
-    new_rat: Rat<SparsePoly<Z64<P>, N>>,
+    new_rat: Rat<FlatPoly<Z64<P>, N>>,
 ) -> FFRat<N> {
     let (num, den) = rat.rat.into_num_den();
     let modulus = rat.modulus;
@@ -547,8 +547,8 @@ pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
         debug_assert_eq!(term.powers, new_term.powers);
         merge_crt(&mut term.coeff, new_term.coeff, &modulus);
     }
-    let num = SparsePoly::from_raw_terms(num);
-    let den = SparsePoly::from_raw_terms(den);
+    let num = FlatPoly::from_raw_terms(num);
+    let den = FlatPoly::from_raw_terms(den);
     let rat = Rat::from_num_den_unchecked(num, den);
     FFRat {
         rat,
@@ -579,14 +579,14 @@ fn merge_crt<const P: u64>(c: &mut Integer, d: Z64<P>, modulus: &Integer) {
 // rational function over finite characteristic that does not necessarily fit in a `Z64`
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(crate) struct FFRat<const N: usize> {
-    pub(crate) rat: Rat<SparsePoly<Integer, N>>,
+    pub(crate) rat: Rat<FlatPoly<Integer, N>>,
     pub(crate) modulus: Integer,
 }
 
-impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>>
+impl<const P: u64, const N: usize> From<Rat<FlatPoly<Z64<P>, N>>>
     for FFRat<N>
 {
-    fn from(source: Rat<SparsePoly<Z64<P>, N>>) -> Self {
+    fn from(source: Rat<FlatPoly<Z64<P>, N>>) -> Self {
         let rat = source.into();
         Self {
             rat,
@@ -596,7 +596,7 @@ impl<const P: u64, const N: usize> From<Rat<SparsePoly<Z64<P>, N>>>
 }
 
 impl<'a, const N: usize> TryFrom<&'a FFRat<N>>
-    for Rat<SparsePoly<Rational, N>>
+    for Rat<FlatPoly<Rational, N>>
 {
     type Error = NoneError;
 
@@ -605,27 +605,27 @@ impl<'a, const N: usize> TryFrom<&'a FFRat<N>>
         for term in source.rat.num().terms() {
             let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus)
                 .ok_or(NoneError {})?;
-            num.push(SparseMono::new(rat_coeff, term.powers));
+            num.push(FlatMono::new(rat_coeff, term.powers));
         }
-        let num = SparsePoly::from_raw_terms(num);
+        let num = FlatPoly::from_raw_terms(num);
 
         let mut den = Vec::with_capacity(source.rat.den().len());
         for term in source.rat.den().terms().iter() {
             let rat_coeff = rat_reconstruct(&term.coeff, &source.modulus)
                 .ok_or(NoneError {})?;
-            den.push(SparseMono::new(rat_coeff, term.powers));
+            den.push(FlatMono::new(rat_coeff, term.powers));
         }
-        let den = SparsePoly::from_raw_terms(den);
+        let den = FlatPoly::from_raw_terms(den);
 
         Ok(Rat::from_num_den_unchecked(num, den))
     }
 }
 
-impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<SparsePoly<Integer, N>> {
+impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<FlatPoly<Integer, N>> {
     type Error = NoneError;
 
     fn try_from(source: &'a FFRat<N>) -> Result<Self, Self::Error> {
-        Rat::<SparsePoly<Rational, N>>::try_from(source).map(|r| r.into())
+        Rat::<FlatPoly<Rational, N>>::try_from(source).map(|r| r.into())
     }
 }
 
@@ -726,22 +726,22 @@ mod tests {
         }
     }
 
-    fn rand_term<const N: usize>(mut rng: impl Rng) -> SparseMono<Integer, N> {
+    fn rand_term<const N: usize>(mut rng: impl Rng) -> FlatMono<Integer, N> {
         let pow = [(); N].map(|_| rng.gen_range(0..=MAX_POW));
-        SparseMono::new(rand_int(rng), pow)
+        FlatMono::new(rand_int(rng), pow)
     }
 
-    fn rand_poly<const N: usize>(mut rng: impl Rng) -> SparsePoly<Integer, N> {
+    fn rand_poly<const N: usize>(mut rng: impl Rng) -> FlatPoly<Integer, N> {
         let nterms = rng.gen_range(0..=MAX_TERMS);
-        SparsePoly::from_terms(
+        FlatPoly::from_terms(
             (0..nterms).map(|_| rand_term(&mut rng)).collect(),
         )
     }
 
     fn rand_rat<const N: usize>(
         mut rng: impl Rng,
-    ) -> Rat<SparsePoly<Integer, N>> {
-        let mut den = SparsePoly::zero();
+    ) -> Rat<FlatPoly<Integer, N>> {
+        let mut den = FlatPoly::zero();
         while den.is_zero() {
             den = rand_poly(&mut rng);
         }

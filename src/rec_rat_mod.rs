@@ -11,7 +11,7 @@ use crate::{
     rat::Rat,
     rec_linear::{LinearRec, RecLinear},
     rec_thiele::ThieleRec,
-    sparse_poly::{SparseMono, SparsePoly},
+    sparse_poly::{FlatMono, FlatPoly},
     traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS_Z},
 };
@@ -87,8 +87,8 @@ macro_rules! impl_rat_rec_mod_recursive {
                     x_offset: [Z64<P>; $n_minus_one],
                     shift: [Z64<P>; $n],
                     known_pts: Vec<RatPt<P, $n_minus_one>>,
-                    num: SparsePoly<Z64<P>, $n>,
-                    den: SparsePoly<Z64<P>, $n>,
+                    num: FlatPoly<Z64<P>, $n>,
+                    den: FlatPoly<Z64<P>, $n>,
                     status: ReconstructionStatus,
                     subtr: Vec<[<DensePoly $n_minus_one>]<Z64<P>>>
                 }
@@ -391,16 +391,16 @@ macro_rules! impl_rat_rec_mod_recursive {
                             std::mem::take(&mut self.poly_rec).into_poly().into();
                         // turn it back from a polynomial in [x0, x1, ..., t] to [z0, z1, ...]
                         // first expand it out
-                        let rec_poly: SparsePoly<Z64<P>, $n_minus_one> = rec_poly.into();
+                        let rec_poly: FlatPoly<Z64<P>, $n_minus_one> = rec_poly.into();
                         // rescale, adding back the power in t
                         let terms = rec_poly.into_terms().into_iter()
                             .map(|c| {
                                 let mut powers = [0; $n];
                                 powers[0..$n_minus_one].copy_from_slice(&c.powers);
                                 powers[$n_minus_one] = self.t_pow as u32 - c.powers.iter().sum::<u32>();
-                                SparseMono::new(c.coeff, powers)
+                                FlatMono::new(c.coeff, powers)
                             });
-                        let rec_poly = SparsePoly::from_terms(terms.collect());
+                        let rec_poly = FlatPoly::from_terms(terms.collect());
                         debug!("Reconstructed contribution {}", rec_poly.with_vars(Self::zvars()));
                         if !self.shift.is_zero() {
                             self.add_shift_subtr_from(rec_poly.clone());
@@ -429,7 +429,7 @@ macro_rules! impl_rat_rec_mod_recursive {
 
                     fn add_shift_subtr_from(
                         &mut self,
-                        poly: SparsePoly<Z64<P>, $n>
+                        poly: FlatPoly<Z64<P>, $n>
                     ) {
                         use crate::dense_poly::[<DensePoly $n>];
 
@@ -439,15 +439,15 @@ macro_rules! impl_rat_rec_mod_recursive {
                         let subtr = shifted - &collected;
                         trace!("shift subtraction in z: {}", subtr.with_vars(Self::zvars()));
                         // turn it into a polynomial in [t, x0, x1, ...]
-                        let subtr: SparsePoly<Z64<P>, $n> = subtr.into();
+                        let subtr: FlatPoly<Z64<P>, $n> = subtr.into();
                         let terms = subtr.into_terms().into_iter()
                             .map(|c| {
                                 let mut powers = [0; $n];
                                 powers[0] = c.powers.iter().sum::<u32>();
                                 powers[1..].copy_from_slice(&c.powers[0..$n_minus_one]);
-                                SparseMono::new(c.coeff, powers)
+                                FlatMono::new(c.coeff, powers)
                             });
-                        let subtr = SparsePoly::from_terms(terms.collect());
+                        let subtr = FlatPoly::from_terms(terms.collect());
                         let subtr = [<DensePoly $n>]::from(subtr);
                         trace!("shift subtraction in [t, x1, ...]: {subtr}");
                         let new_subtr = subtr.into_coeff().into_iter();
@@ -460,7 +460,7 @@ macro_rules! impl_rat_rec_mod_recursive {
                         self.status
                     }
 
-                    pub fn into_rat(self) -> Rat<SparsePoly<Z64<P>, $n>> {
+                    pub fn into_rat(self) -> Rat<FlatPoly<Z64<P>, $n>> {
                         if self.status() != ReconstructionStatus::Done {
                             warn!("Taking out rational function before reconstruction is finished");
                         }
@@ -556,7 +556,7 @@ macro_rules! impl_rec_with_ran {
             paste! {
                 impl<F, const P: u64> Rec<RatRecMod, [Z64<P>; $x]> for F
                 where F: FnMut([Z64<P>; $x]) -> Option<Z64<P>> {
-                    type Output = Option<Rat<SparsePoly<Z64<P>, $x>>>;
+                    type Output = Option<Rat<FlatPoly<Z64<P>, $x>>>;
 
                     fn rec_with_ran(
                         &mut self,
@@ -611,7 +611,7 @@ macro_rules! impl_rec_with_ran {
 
                 impl<F, const P: u64> Rec<RatRecMod, [[Z64<P>; $x]; 1]> for F
                 where F: TryEval<[Z64<P>; $x], Output = Z64<P>> {
-                    type Output = Option<Rat<SparsePoly<Z64<P>, $x>>>;
+                    type Output = Option<Rat<FlatPoly<Z64<P>, $x>>>;
 
                     fn rec_with_ran(
                         &mut self,
@@ -630,7 +630,7 @@ impl<F, const P: u64> Rec<RatRecMod, [Z64<P>; 1]> for F
 where
     F: FnMut([Z64<P>; 1]) -> Option<Z64<P>>,
 {
-    type Output = Option<Rat<SparsePoly<Z64<P>, 1>>>;
+    type Output = Option<Rat<FlatPoly<Z64<P>, 1>>>;
 
     fn rec_with_ran(&mut self, rec: RatRecMod, rng: impl Rng) -> Self::Output {
         let rec = ThieleRec::new(rec.extra_pts);
@@ -643,7 +643,7 @@ impl<F, const P: u64> Rec<RatRecMod, [[Z64<P>; 1]; 1]> for F
 where
     F: TryEval<[Z64<P>; 1], Output = Z64<P>>,
 {
-    type Output = Option<Rat<SparsePoly<Z64<P>, 1>>>;
+    type Output = Option<Rat<FlatPoly<Z64<P>, 1>>>;
 
     fn rec_with_ran(&mut self, rec: RatRecMod, rng: impl Rng) -> Self::Output {
         (|x: [Z64<P>; 1]| self.try_eval(&x)).rec_with_ran(rec, rng)
@@ -678,7 +678,7 @@ mod tests {
     use rand_xoshiro::rand_core::SeedableRng;
 
     use crate::{
-        sparse_poly::SparseMono,
+        sparse_poly::FlatMono,
         traits::{One, TryEval, Zero},
     };
 
@@ -708,35 +708,35 @@ mod tests {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| {
-                SparseMono::new(
+                FlatMono::new(
                     ran_coeff(&mut rng),
                     [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
             })
             .take(nterms)
             .collect();
-            let num = SparsePoly::from_terms(coeff);
+            let num = FlatPoly::from_terms(coeff);
 
             let den = if num.is_zero() {
                 One::one()
             } else {
-                let mut den: SparsePoly<_, 2> = Zero::zero();
+                let mut den: FlatPoly<_, 2> = Zero::zero();
                 while den.is_zero() {
                     let coeff = repeat_with(|| {
-                        SparseMono::new(
+                        FlatMono::new(
                             ran_coeff(&mut rng),
                             [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
                     })
                     .take(nterms)
                     .collect();
-                    den = SparsePoly::from_terms(coeff);
+                    den = FlatPoly::from_terms(coeff);
                 }
                 // ensure we don't need a shift
                 let mut den = den.into_terms();
                 den[0].powers = Zero::zero();
                 den[0].coeff = One::one();
-                SparsePoly::from_terms(den)
+                FlatPoly::from_terms(den)
             };
 
             let rat = Rat::from_num_den_unchecked(num, den);
@@ -758,12 +758,12 @@ mod tests {
         let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
         let rec = RatRecMod::new(1);
 
-        let x = SparseMono::new(Z64::one(), [1, 0]);
-        let y = SparseMono::new(Z64::one(), [0, 1]);
+        let x = FlatMono::new(Z64::one(), [1, 0]);
+        let y = FlatMono::new(Z64::one(), [0, 1]);
 
         // 1 / y
-        let num = SparsePoly::<Z64<P>, 2>::one();
-        let den = SparsePoly::<Z64<P>, 2>::from_terms(vec![y]);
+        let num = FlatPoly::<Z64<P>, 2>::one();
+        let den = FlatPoly::<Z64<P>, 2>::from_terms(vec![y]);
         let rat = Rat::from_num_den_unchecked(num, den);
         eprintln!("trying to reconstruct {rat}");
         let res = (|z: [Z64<P>; 2]| rat.try_eval(&z))
@@ -773,8 +773,8 @@ mod tests {
         assert!(sample_eq(&rat, &res, &mut rng));
 
         // 1 / y^2
-        let num = SparsePoly::<Z64<P>, 2>::one();
-        let den = SparsePoly::<Z64<P>, 2>::from_terms(vec![y * y]);
+        let num = FlatPoly::<Z64<P>, 2>::one();
+        let den = FlatPoly::<Z64<P>, 2>::from_terms(vec![y * y]);
         let rat = Rat::from_num_den_unchecked(num, den);
         eprintln!("trying to reconstruct {rat}");
         let res = (|z: [Z64<P>; 2]| rat.try_eval(&z))
@@ -784,8 +784,8 @@ mod tests {
         assert!(sample_eq(&rat, &res, &mut rng));
 
         // 1 / x
-        let num = SparsePoly::<Z64<P>, 2>::one();
-        let den = SparsePoly::<Z64<P>, 2>::from_terms(vec![x]);
+        let num = FlatPoly::<Z64<P>, 2>::one();
+        let den = FlatPoly::<Z64<P>, 2>::from_terms(vec![x]);
         let rat = Rat::from_num_den_unchecked(num, den);
         eprintln!("trying to reconstruct {rat}");
         let res = (|z: [Z64<P>; 2]| rat.try_eval(&z))
@@ -815,29 +815,29 @@ mod tests {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| {
-                SparseMono::new(
+                FlatMono::new(
                     ran_coeff(&mut rng),
                     [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
             })
             .take(nterms)
             .collect();
-            let num = SparsePoly::from_terms(coeff);
+            let num = FlatPoly::from_terms(coeff);
 
             let den = if num.is_zero() {
                 One::one()
             } else {
-                let mut den: SparsePoly<_, 2> = Zero::zero();
+                let mut den: FlatPoly<_, 2> = Zero::zero();
                 while den.is_zero() {
                     let coeff = repeat_with(|| {
-                        SparseMono::new(
+                        FlatMono::new(
                             ran_coeff(&mut rng),
                             [(); 2].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
                     })
                     .take(nterms)
                     .collect();
-                    den = SparsePoly::from_terms(coeff);
+                    den = FlatPoly::from_terms(coeff);
                 }
                 den
             };
@@ -871,29 +871,29 @@ mod tests {
             let max_pow = rng.gen_range(0..=MAX_POW);
             let nterms = 2usize.pow(max_pow);
             let coeff = repeat_with(|| {
-                SparseMono::new(
+                FlatMono::new(
                     ran_coeff(&mut rng),
                     [(); 3].map(|_| rng.gen_range(0..=MAX_POW)),
                 )
             })
             .take(nterms)
             .collect();
-            let num = SparsePoly::from_terms(coeff);
+            let num = FlatPoly::from_terms(coeff);
 
             let den = if num.is_zero() {
                 One::one()
             } else {
-                let mut den: SparsePoly<_, 3> = Zero::zero();
+                let mut den: FlatPoly<_, 3> = Zero::zero();
                 while den.is_zero() {
                     let coeff = repeat_with(|| {
-                        SparseMono::new(
+                        FlatMono::new(
                             ran_coeff(&mut rng),
                             [(); 3].map(|_| rng.gen_range(0..=MAX_POW)),
                         )
                     })
                     .take(nterms)
                     .collect();
-                    den = SparsePoly::from_terms(coeff);
+                    den = FlatPoly::from_terms(coeff);
                 }
                 den
             };
@@ -909,8 +909,8 @@ mod tests {
     }
 
     fn sample_eq<const P: u64>(
-        orig: &Rat<SparsePoly<Z64<P>, 2>>,
-        rec: &Rat<SparsePoly<Z64<P>, 2>>,
+        orig: &Rat<FlatPoly<Z64<P>, 2>>,
+        rec: &Rat<FlatPoly<Z64<P>, 2>>,
         mut rng: impl Rng,
     ) -> bool {
         const TESTS: usize = 10;
@@ -924,8 +924,8 @@ mod tests {
     }
 
     fn sample_eq3<const P: u64>(
-        orig: &Rat<SparsePoly<Z64<P>, 3>>,
-        rec: &Rat<SparsePoly<Z64<P>, 3>>,
+        orig: &Rat<FlatPoly<Z64<P>, 3>>,
+        rec: &Rat<FlatPoly<Z64<P>, 3>>,
         mut rng: impl Rng,
     ) -> bool {
         const TESTS: usize = 10;
