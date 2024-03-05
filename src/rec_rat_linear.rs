@@ -9,11 +9,13 @@ use seq_macro::seq;
 use thiserror::Error;
 
 use crate::{
-    rat::{NoneError, Rat},
+    algebra::{
+        poly::{dense::DensePoly, flat::{FlatPoly, FlatMono}},
+        rat::{Rat, NoneError}
+    },
     rec_linear::{RecLinear, UNIT, Unit},
     rec_rat::{combine_crt_rat, FFRat, LARGE_PRIMES},
-    sparse_poly::{FlatPoly, FlatMono},
-    traits::{TryEval, One, Zero, Rec}, rec_thiele::ThieleRec, dense_poly::DensePoly,
+    traits::{TryEval, One, Zero, Rec}, rec_thiele::ThieleRec,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]

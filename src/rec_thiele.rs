@@ -8,10 +8,11 @@ use log::{debug, trace};
 use rand::{thread_rng, Rng};
 
 use crate::{
-    dense_poly::DensePoly,
+    algebra::{
+        poly::{dense::DensePoly, flat::FlatPoly},
+        rat::Rat
+    },
     rand::pt_iter,
-    rat::Rat,
-    sparse_poly::FlatPoly,
     traits::{One, Rec, TryEval, WithVars, Zero},
 };
 

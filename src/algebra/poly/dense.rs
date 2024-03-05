@@ -10,7 +10,7 @@ use itertools::Itertools;
 use paste::paste;
 
 use crate::{
-    sparse_poly::{FlatMono, FlatPoly},
+    algebra::poly::flat::{FlatMono, FlatPoly},
     traits::{Eval, One, Shift, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS},
 };

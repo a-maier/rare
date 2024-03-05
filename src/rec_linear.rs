@@ -5,11 +5,12 @@ use log::{debug, trace};
 use num_integer::Roots;
 
 use crate::{
-    dense_poly::DensePoly,
+    algebra::{
+        poly::{dense::DensePoly, flat::{FlatMono, FlatPoly}},
+        rat::Rat
+    },
     matrix::Matrix,
     rand::pt_iter,
-    rat::Rat,
-    sparse_poly::{FlatMono, FlatPoly},
     traits::{Eval, One, Rec, Zero},
 };
 

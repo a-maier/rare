@@ -6,12 +6,13 @@ use paste::paste;
 use rand::Rng;
 
 use crate::{
+    algebra::{
+        poly::{dense::DensePoly, flat::{FlatPoly, FlatMono}},
+        rat::Rat
+    },
     arr::Arr,
-    dense_poly::DensePoly,
-    rat::Rat,
     rec_linear::{LinearRec, RecLinear},
     rec_thiele::ThieleRec,
-    sparse_poly::{FlatMono, FlatPoly},
     traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS_Z},
 };
@@ -61,7 +62,7 @@ macro_rules! impl_rat_rec_mod_recursive {
         $(
             paste! {
                 use crate::rec_newton::[<NewtonPolyRec $n_minus_one>];
-                use crate::dense_poly::[<DensePoly $n_minus_one>];
+                use crate::algebra::poly::dense::[<DensePoly $n_minus_one>];
 
                 /// Rational function reconstruction of $n variables over finite field with characteristic `P'
                 // Note that the _internal_ normalisation convention
@@ -431,7 +432,7 @@ macro_rules! impl_rat_rec_mod_recursive {
                         &mut self,
                         poly: FlatPoly<Z64<P>, $n>
                     ) {
-                        use crate::dense_poly::[<DensePoly $n>];
+                        use crate::algebra::poly::dense::[<DensePoly $n>];
 
                         // calculate P(z + s) - P(Z)
                         let collected = [<DensePoly $n>]::from(poly);

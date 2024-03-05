@@ -12,10 +12,11 @@ use paste::paste;
 use rug::{integer::IntegerExt64, Complete, Integer};
 
 use crate::{
-    dense_poly::DensePoly,
     traits::{Eval, One, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS},
 };
+
+use super::dense::DensePoly;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FlatPoly<T, const Z: usize> {
@@ -404,7 +405,7 @@ macro_rules! impl_poly_conv_rec {
             }
 
             paste! {
-                use crate::dense_poly::[<DensePoly $x>];
+                use crate::algebra::poly::dense::[<DensePoly $x>];
 
                 impl<T: Zero> From<[<DensePoly $x>]<T>> for FlatPoly<T, $x> {
                     fn from(source: [<DensePoly $x>]<T>) -> Self {

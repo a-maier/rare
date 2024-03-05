@@ -8,9 +8,8 @@ use rug::{ops::NegAssign, Integer, Rational};
 use thiserror::Error;
 
 use crate::{
+    algebra::poly::{dense::DensePoly, flat::{FlatMono, FlatPoly}},
     arr::Arr,
-    dense_poly::DensePoly,
-    sparse_poly::{FlatMono, FlatPoly},
     traits::{One, TryEval, WithVars, Zero},
 };
 

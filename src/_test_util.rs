@@ -6,9 +6,10 @@ use rand::{distributions::Standard, prelude::Distribution, Rng};
 use seq_macro::seq;
 
 use crate::{
-    dense_poly::{DensePoly, DensePoly1},
-    rat::Rat,
-    sparse_poly::{FlatMono, FlatPoly},
+    algebra::{
+        poly::{dense::{DensePoly, DensePoly1}, flat::{FlatPoly, FlatMono}},
+        rat::Rat
+    },
     traits::{One, TryEval, Zero},
 };
 
@@ -28,7 +29,7 @@ macro_rules! impl_gen_recursive {
     ( $($x_minus_one:literal, $x:literal), * ) => {
         $(
             paste! {
-                use crate::dense_poly::[<DensePoly $x>];
+                use crate::algebra::poly::dense::[<DensePoly $x>];
 
                 pub fn [<gen_dense_poly $x>]<const P: u64>(
                     n: &[u32; $x],

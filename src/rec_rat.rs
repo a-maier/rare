@@ -8,11 +8,13 @@ use rug::{integer::IntegerExt64, ops::RemRounding, Integer, Rational};
 use seq_macro::seq;
 
 use crate::{
+    algebra::{
+        poly::flat::{FlatMono, FlatPoly},
+        rat::{Rat, NoneError}
+    },
     arr::Arr,
-    rat::{NoneError, Rat},
     rec_linear::RecLinear,
     rec_rat_mod::{self, RatRecMod},
-    sparse_poly::{FlatMono, FlatPoly},
     traits::{One, Rec, TryEval, Zero},
 };
 

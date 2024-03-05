@@ -9,12 +9,9 @@ use paste::paste;
 use rand::{thread_rng, Rng};
 
 use crate::{
-    dense_poly::DensePoly,
-    traits::{Eval, TryEval},
-};
-use crate::{
+    algebra::poly::dense::DensePoly,
     rand::pt_iter,
-    traits::{One, Rec, WithVars, Zero},
+    traits::{Eval, TryEval, One, Rec, WithVars, Zero},
     util::{slice_start, ALL_VARS},
 };
 
@@ -467,7 +464,7 @@ macro_rules! impl_newton_poly {
     ( $($x:literal), *) => {
         $(
             paste! {
-                use crate::dense_poly::[<DensePoly $x>];
+                use crate::algebra::poly::dense::[<DensePoly $x>];
 
                 impl<const P: u64> Display for [<NewtonPoly $x>]<Z64<P>> {
                     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
