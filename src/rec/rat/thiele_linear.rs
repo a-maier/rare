@@ -98,7 +98,25 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                 } else {
                     let nnum = nterms_with_max_pows(self.num_pows());
                     let nden = nterms_with_max_pows(self.den_pows());
-                    self.status = Status::Rat(nnum + nden + self.extra_pts - 1);
+                    if N == 1 {
+                        // for univariate rational functions we have already completed
+                        // reconstruction over the first finite field
+                        let ncoeff = rat.num().len() + rat.den().len() - 1;
+                        let (num, den) = rat.into_num_den();
+                        let rat: Rat<FlatPoly<Z64<P>, 1>> = Rat::from_num_den_unchecked(
+                            num.into(),
+                            den.into()
+                        );
+                        assert_eq!(N, 1);
+                        // SAFETY: the above assert
+                        let rat: Rat<FlatPoly<Z64<P>, N>> = unsafe {
+                            std::mem::transmute(rat)
+                        };
+                        self.rat = FFRat::from(rat);
+                        self.status = Status::Rat(ncoeff);
+                    } else {
+                        self.status = Status::Rat(nnum + nden + self.extra_pts - 1);
+                    }
                 }
             }
         }
