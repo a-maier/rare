@@ -119,7 +119,10 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                         std::slice::from_raw_parts(pts.as_ptr() as _, pts.len())
                     };
                     for Probe{arg, val} in pts.iter().copied() {
-                        self.add_pt(arg, val);
+                        let status = self.add_pt(arg, val);
+                        if !matches!(status, Status::Degrees{..}) {
+                            break;
+                        }
                     }
                 } else {
                     warn!("Ignoring points in characteristic {Q}, need characteristic {P}");
