@@ -16,11 +16,11 @@ pub mod algebra;
 /// Function reconstruction algorithms
 pub mod rec;
 
-#[deprecated]
+#[deprecated(note = "Use rare::algebra::poly::dense instead")]
 pub mod dense_poly;
-#[deprecated]
+#[deprecated(note = "Use rare::algebra::poly::flat instead")]
 pub mod sparse_poly;
-#[deprecated]
+#[deprecated(note = "Use rare::algebra::rat instead")]
 pub mod rat;
 #[deprecated(note = "Use rare::rec::rat::finite::thiele instead")]
 pub mod rec_thiele;
