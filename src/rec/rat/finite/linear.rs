@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Reconstruction using a linear system of equations built from the given points
-pub(crate) trait RecLinear<Pts> {
+pub trait RecLinear<Pts> {
     type Output;
 
     /// Attempt the reconstruction

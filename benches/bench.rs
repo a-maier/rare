@@ -1,23 +1,28 @@
 use std::iter::repeat_with;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use galois_fields::Z64;
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 use rare::{
+    algebra::poly::{
+        dense::{DensePoly, DensePoly2},
+        flat::FlatPoly
+    },
+    rec::{
+        poly::finite::newton::{NewtonPoly, NewtonPoly2, NewtonRec},
+        rat::finite::{
+            cuyt_lee::RatRecMod,
+            linear::{LinearRec, RecLinear},
+            thiele::{ThieleRat, ThieleRec}
+        }
+    },
     _test_util::{
         gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2,
         gen_sparse_rat,
     },
-    dense_poly::{DensePoly, DensePoly2},
     rat::Rat,
-    rec_linear::LinearRec,
-    rec_linear_multivar::rec_coeff,
-    rec_newton::{NewtonPoly, NewtonPoly2, NewtonRec},
-    rec_rat_mod::RatRecMod,
-    rec_thiele::{ThieleRat, ThieleRec},
-    sparse_poly::SparsePoly,
     traits::{Eval, Rec, TryEval},
+    Z64
 };
 
 fn rec_poly1<const P: u64>(
@@ -133,7 +138,7 @@ fn rec_rat1_linear<const P: u64>(
 
 fn rec_rat2<const P: u64>(
     rats: &[Rat<DensePoly2<Z64<P>>>],
-) -> Vec<Rat<SparsePoly<Z64<P>, 2>>> {
+) -> Vec<Rat<FlatPoly<Z64<P>, 2>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
     let rec = RatRecMod::new(1);
@@ -148,8 +153,8 @@ fn rec_rat2<const P: u64>(
 }
 
 fn rec_rat2_linear<const P: u64>(
-    rats: &[Rat<SparsePoly<Z64<P>, 2>>],
-) -> Vec<Rat<SparsePoly<Z64<P>, 2>>> {
+    rats: &[Rat<FlatPoly<Z64<P>, 2>>],
+) -> Vec<Rat<FlatPoly<Z64<P>, 2>>> {
     let mut res = Vec::with_capacity(rats.len());
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(1);
 
@@ -167,7 +172,7 @@ fn rec_rat2_linear<const P: u64>(
             .filter_map(|pt| pt)
             .take(nneeded),
         );
-        res.push(rec_coeff(&rat, &pts).unwrap());
+        res.push(rat.rec_linear(pts).unwrap());
     }
     res
 }
@@ -220,7 +225,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("rat2", |b| b.iter(|| rec_rat2(&rats)));
 
-    let mut rats: [Rat<SparsePoly<Z64<P>, 2>>; NPOLYS] = Default::default();
+    let mut rats: [Rat<FlatPoly<Z64<P>, 2>>; NPOLYS] = Default::default();
     for rat in &mut rats {
         *rat = gen_sparse_rat(N / 2, N / 2, &mut rng)
     }
