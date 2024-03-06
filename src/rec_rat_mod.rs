@@ -61,7 +61,7 @@ macro_rules! impl_rat_rec_mod_recursive {
     ( $($n:literal, $n_minus_one:literal), * ) => {
         $(
             paste! {
-                use crate::rec_newton::[<NewtonPolyRec $n_minus_one>];
+                use crate::rec::poly::finite::newton::[<NewtonPolyRec $n_minus_one>];
                 use crate::algebra::poly::dense::[<DensePoly $n_minus_one>];
 
                 /// Rational function reconstruction of $n variables over finite field with characteristic `P'

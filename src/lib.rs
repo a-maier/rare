@@ -5,7 +5,6 @@ mod arr;
 mod matrix;
 pub mod rand;
 pub mod rec_linear;
-pub mod rec_newton;
 pub mod rec_rat;
 pub mod rec_rat_linear;
 pub mod rec_rat_mod;
@@ -26,6 +25,8 @@ pub mod sparse_poly;
 pub mod rat;
 #[deprecated(note = "Use rare::rec::rat::finite::thiele instead")]
 pub mod rec_thiele;
+#[deprecated(note = "Use rare::rec::poly::finite::newton instead")]
+pub mod rec_newton;
 
 
 pub use ffnt::Z64;
