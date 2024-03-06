@@ -13,11 +13,16 @@ use crate::{
         poly::{dense::DensePoly, flat::{FlatPoly, FlatMono}},
         rat::{Rat, NoneError}
     },
-    rec::rat::finite::{
-        linear::{RecLinear, Unit, UNIT},
-        thiele::ThieleRec
+    rec::{
+        primes::LARGE_PRIMES,
+        rat::{
+            ffrat::{combine_crt_rat, FFRat},
+            finite::{
+                linear::{RecLinear, Unit, UNIT},
+                thiele::ThieleRec
+            }
+        }
     },
-    rec_rat::{combine_crt_rat, FFRat, LARGE_PRIMES},
     traits::{TryEval, Zero, Rec},
 };
 

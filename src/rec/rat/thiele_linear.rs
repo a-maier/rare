@@ -2,7 +2,7 @@ use ffnt::Z64;
 use log::{warn, debug, trace};
 use rug::Integer;
 
-use crate::{rec_rat::FFRat, algebra::{poly::{flat::{FlatPoly, FlatMono}, dense::DensePoly}, rat::{Rat, NoneError}}, traits::{One, Zero, TryEval}, rec::{probe::Probe, rat::finite::{linear::{RecLinear, Unit, UNIT}, thiele::ThieleRec}}, rec_rat::{combine_crt_rat}};
+use crate::{algebra::{poly::{flat::{FlatPoly, FlatMono}, dense::DensePoly}, rat::{Rat, NoneError}}, traits::{One, Zero, TryEval}, rec::{probe::Probe, rat::finite::{linear::{RecLinear, Unit, UNIT}, thiele::ThieleRec}}, rec::rat::ffrat::{combine_crt_rat, FFRat}};
 
 /// Reconstruction status
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -261,7 +261,7 @@ mod tests {
     use super::*;
     use ::rand::{Rng, SeedableRng};
 
-    use crate::rec_rat::LARGE_PRIMES;
+    use crate::rec::primes::LARGE_PRIMES;
     use crate::sparse_poly::FlatMono;
     use crate::traits::Zero;
     use paste::paste;
