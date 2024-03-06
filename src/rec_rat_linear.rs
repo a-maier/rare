@@ -13,9 +13,10 @@ use crate::{
         poly::{dense::DensePoly, flat::{FlatPoly, FlatMono}},
         rat::{Rat, NoneError}
     },
+    rec::rat::finite::thiele::ThieleRec,
     rec_linear::{RecLinear, UNIT, Unit},
     rec_rat::{combine_crt_rat, FFRat, LARGE_PRIMES},
-    traits::{TryEval, Zero, Rec}, rec_thiele::ThieleRec,
+    traits::{TryEval, Zero, Rec},
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]

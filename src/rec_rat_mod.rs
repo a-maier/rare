@@ -12,7 +12,7 @@ use crate::{
     },
     arr::Arr,
     rec_linear::{LinearRec, RecLinear},
-    rec_thiele::ThieleRec,
+    rec::rat::finite::thiele::ThieleRec,
     traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS_Z},
 };

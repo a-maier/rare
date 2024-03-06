@@ -9,7 +9,6 @@ pub mod rec_newton;
 pub mod rec_rat;
 pub mod rec_rat_linear;
 pub mod rec_rat_mod;
-pub mod rec_thiele;
 pub mod traits;
 mod util;
 
@@ -25,6 +24,8 @@ pub mod dense_poly;
 pub mod sparse_poly;
 #[deprecated]
 pub mod rat;
+#[deprecated(note = "Use rare::rec::rat::finite::thiele instead")]
+pub mod rec_thiele;
 
 
 pub use ffnt::Z64;
