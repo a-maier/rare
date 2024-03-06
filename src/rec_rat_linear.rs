@@ -567,7 +567,6 @@ mod tests {
     use super::*;
     use ::rand::{Rng, SeedableRng};
 
-    use crate::rec_rat::LARGE_PRIMES;
     use crate::sparse_poly::FlatMono;
     use crate::traits::Zero;
     use rug::integer::Order;
