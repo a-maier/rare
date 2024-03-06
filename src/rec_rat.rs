@@ -13,7 +13,7 @@ use crate::{
         rat::{Rat, NoneError}
     },
     arr::Arr,
-    rec_linear::RecLinear,
+    rec::rat::finite::linear::RecLinear,
     rec_rat_mod::{self, RatRecMod},
     traits::{One, Rec, TryEval, Zero},
 };

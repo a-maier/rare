@@ -4,7 +4,6 @@ pub mod _test_util;
 mod arr;
 mod matrix;
 pub mod rand;
-pub mod rec_linear;
 pub mod rec_rat;
 pub mod rec_rat_linear;
 pub mod rec_rat_mod;
@@ -27,6 +26,8 @@ pub mod rat;
 pub mod rec_thiele;
 #[deprecated(note = "Use rare::rec::poly::finite::newton instead")]
 pub mod rec_newton;
+#[deprecated(note = "Use rare::rec::rat::finite::linear instead")]
+pub mod rec_linear;
 
 
 pub use ffnt::Z64;

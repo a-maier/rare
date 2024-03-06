@@ -11,8 +11,7 @@ use crate::{
         rat::Rat
     },
     arr::Arr,
-    rec_linear::{LinearRec, RecLinear},
-    rec::rat::finite::thiele::ThieleRec,
+    rec::rat::finite::{linear::{LinearRec, RecLinear}, thiele::ThieleRec},
     traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS_Z},
 };
