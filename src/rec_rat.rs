@@ -13,8 +13,7 @@ use crate::{
         rat::{Rat, NoneError}
     },
     arr::Arr,
-    rec::rat::finite::linear::RecLinear,
-    rec_rat_mod::{self, RatRecMod},
+    rec::rat::finite::{cuyt_lee::{self, RatRecMod}, linear::RecLinear},
     traits::{One, Rec, TryEval, Zero},
 };
 
@@ -159,14 +158,14 @@ pub enum ReconstructionStatus {
     Done,
 }
 
-impl From<rec_rat_mod::ReconstructionStatus> for ReconstructionStatus {
-    fn from(source: rec_rat_mod::ReconstructionStatus) -> Self {
+impl From<cuyt_lee::ReconstructionStatus> for ReconstructionStatus {
+    fn from(source: cuyt_lee::ReconstructionStatus) -> Self {
         use ReconstructionStatus::*;
         match source {
-            rec_rat_mod::ReconstructionStatus::Rat => FirstRat,
-            rec_rat_mod::ReconstructionStatus::NumPoly => FirstNumPoly,
-            rec_rat_mod::ReconstructionStatus::DenPoly => FirstDenPoly,
-            rec_rat_mod::ReconstructionStatus::Done => Done,
+            cuyt_lee::ReconstructionStatus::Rat => FirstRat,
+            cuyt_lee::ReconstructionStatus::NumPoly => FirstNumPoly,
+            cuyt_lee::ReconstructionStatus::DenPoly => FirstDenPoly,
+            cuyt_lee::ReconstructionStatus::Done => Done,
         }
     }
 }
@@ -178,19 +177,19 @@ pub enum Needed<const N: usize> {
     Any(usize),
 }
 
-impl<const N: usize> From<rec_rat_mod::Needed<P0, N>> for Needed<N> {
-    fn from(source: rec_rat_mod::Needed<P0, N>) -> Self {
+impl<const N: usize> From<cuyt_lee::Needed<P0, N>> for Needed<N> {
+    fn from(source: cuyt_lee::Needed<P0, N>) -> Self {
         use Needed::*;
         match source {
-            rec_rat_mod::Needed::Pt(pt) => Pt(pt),
-            rec_rat_mod::Needed::Pts(pts) => Pts(pts),
+            cuyt_lee::Needed::Pt(pt) => Pt(pt),
+            cuyt_lee::Needed::Pts(pts) => Pts(pts),
         }
     }
 }
 
 seq! {N in 2..=16 {
     paste! {
-        use crate::rec_rat_mod::[<RatRecMod N>];
+        use crate::rec::rat::finite::cuyt_lee::[<RatRecMod N>];
 
         #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
         pub struct [<RatRec N>] {
@@ -309,7 +308,7 @@ seq! {N in 2..=16 {
             }
 
             fn finish_first_mod_rec(&mut self) {
-                debug_assert_eq!(self.rec.status(), rec_rat_mod::ReconstructionStatus::Done);
+                debug_assert_eq!(self.rec.status(), cuyt_lee::ReconstructionStatus::Done);
                 let rec = std::mem::replace(&mut self.rec, [<RatRecMod N>]::new(0));
                 let rec = normalise_coeff(rec.into_rat());
                 self.rat = FFRat::from(rec);
@@ -703,7 +702,7 @@ mod tests {
     use ::rand::SeedableRng;
     use rug::integer::Order;
 
-    use crate::rec_rat_mod::find_shift;
+    use crate::rec::rat::finite::cuyt_lee::find_shift;
 
     use super::*;
 

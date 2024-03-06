@@ -6,7 +6,6 @@ mod matrix;
 pub mod rand;
 pub mod rec_rat;
 pub mod rec_rat_linear;
-pub mod rec_rat_mod;
 pub mod traits;
 mod util;
 
@@ -28,7 +27,8 @@ pub mod rec_thiele;
 pub mod rec_newton;
 #[deprecated(note = "Use rare::rec::rat::finite::linear instead")]
 pub mod rec_linear;
-
+#[deprecated(note = "Use rare::rec::rat::finite::cuyt_lee instead")]
+pub mod rec_rat_mod;
 
 pub use ffnt::Z64;
 pub use rug::Integer;
