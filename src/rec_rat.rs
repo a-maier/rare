@@ -9,13 +9,11 @@ use seq_macro::seq;
 use crate::{
     algebra::{
         poly::flat::FlatPoly,
-        rat::{Rat, NoneError}
+        rat::{NoneError, Rat},
     },
-    rec::{
-        rat::{
-            finite::{cuyt_lee, linear::RecLinear},
-            ffrat::FFRat
-        }
+    rec::rat::{
+        ffrat::FFRat,
+        finite::{cuyt_lee, linear::RecLinear},
     },
     traits::{TryEval, Zero},
 };
@@ -230,7 +228,6 @@ seq! {N in 2..=16 {
         }
     }
 }}
-
 
 pub(crate) fn normalise_coeff<const P: u64, const N: usize>(
     rat: Rat<FlatPoly<Z64<P>, N>>,

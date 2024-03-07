@@ -162,8 +162,7 @@ where
     }
 }
 
-impl<'a, 'b, T, const Z: usize> Mul<&'b FlatPoly<T, Z>>
-    for &'a FlatPoly<T, Z>
+impl<'a, 'b, T, const Z: usize> Mul<&'b FlatPoly<T, Z>> for &'a FlatPoly<T, Z>
 where
     T: Zero + AddAssign,
     &'a T: Mul<&'b T, Output = T>,
@@ -360,10 +359,7 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     }
 }
 
-impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]>
-    for FlatPoly<Integer, Z>
-{
-}
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for FlatPoly<Integer, Z> {}
 
 impl<T: Zero> From<DensePoly<T>> for FlatPoly<T, 1> {
     fn from(source: DensePoly<T>) -> Self {
@@ -605,8 +601,7 @@ where
     }
 }
 
-impl<'a, 'b, T, const Z: usize> Mul<&'b FlatMono<T, Z>>
-    for &'a FlatMono<T, Z>
+impl<'a, 'b, T, const Z: usize> Mul<&'b FlatMono<T, Z>> for &'a FlatMono<T, Z>
 where
     &'a T: Mul<&'b T>,
 {
@@ -680,8 +675,7 @@ where
     }
 }
 
-impl<'a, 'b, T, const Z: usize> Div<&'b FlatMono<T, Z>>
-    for &'a FlatMono<T, Z>
+impl<'a, 'b, T, const Z: usize> Div<&'b FlatMono<T, Z>> for &'a FlatMono<T, Z>
 where
     &'a T: Div<&'b T>,
 {
@@ -892,10 +886,7 @@ impl<const P: u64, const Z: usize> TryEval<[Z64<P>; Z]>
     }
 }
 
-impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]>
-    for FlatMono<Integer, Z>
-{
-}
+impl<const P: u64, const Z: usize> Eval<[Z64<P>; Z]> for FlatMono<Integer, Z> {}
 
 impl<const Z: usize> TryEval<[Integer; Z]> for FlatMono<Integer, Z> {
     type Output = Integer;
@@ -961,7 +952,9 @@ impl<'a, 'b, V: Display, const Z: usize> Display
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         debug_assert_eq!(self.m.powers.len(), self.vars.len());
-        let var_pows = self.vars.iter()
+        let var_pows = self
+            .vars
+            .iter()
             .zip(self.m.powers.iter())
             .filter(|(_, p)| **p > 0);
         // omit coefficient if it's 1 and there are variables.

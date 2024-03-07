@@ -1,9 +1,16 @@
 use ffnt::Z64;
 use rug::{integer::IntegerExt64, ops::RemRounding, Integer, Rational};
 
-use crate::{arr::Arr, traits::{One, Zero}};
+use crate::{
+    arr::Arr,
+    traits::{One, Zero},
+};
 
-pub(crate) fn merge_crt<const P: u64>(c: &mut Integer, d: Z64<P>, modulus: &Integer) {
+pub(crate) fn merge_crt<const P: u64>(
+    c: &mut Integer,
+    d: Z64<P>,
+    modulus: &Integer,
+) {
     // Terms [a, b] in Bézout's identity a * N + b * M = 1 for coprime N, M
     let ExtendedGCDResult { gcd, bezout } =
         extended_gcd(modulus.clone(), Integer::from(P));
@@ -25,7 +32,7 @@ pub(crate) fn merge_crt<const P: u64>(c: &mut Integer, d: Z64<P>, modulus: &Inte
 
 pub(crate) fn rat_reconstruct(
     coeff: &Integer,
-    modulus: &Integer
+    modulus: &Integer,
 ) -> Option<Rational> {
     // TODO: code duplication
     let max_bound = Integer::from(modulus / 2);

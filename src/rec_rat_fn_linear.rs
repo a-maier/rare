@@ -7,8 +7,11 @@ use seq_macro::seq;
 
 use crate::{
     algebra::{
-        poly::{dense::DensePoly, flat::{FlatPoly, FlatMono}},
-        rat::Rat
+        poly::{
+            dense::DensePoly,
+            flat::{FlatMono, FlatPoly},
+        },
+        rat::Rat,
     },
     rec::{
         primes::LARGE_PRIMES,
@@ -16,14 +19,14 @@ use crate::{
             ffrat::FFRat,
             finite::{
                 linear::{RecLinear, Unit, UNIT},
-                thiele::ThieleRec
-            }
-        }
+                thiele::ThieleRec,
+            },
+        },
     },
-    traits::{TryEval, Zero, Rec},
+    traits::{Rec, TryEval, Zero},
 };
 
-use crate::rec_rat_linear::{RatRecLinear, nterms_with_max_pows};
+use crate::rec_rat_linear::{nterms_with_max_pows, RatRecLinear};
 
 seq!(N in 0..114 {
     paste! { const [<P N>]: u64 = LARGE_PRIMES[N]; }
@@ -148,7 +151,11 @@ where
 {
     type Output = Option<Rat<FlatPoly<Integer, N>>>;
 
-    fn rec_with_ran(&mut self, rec: RatRecLinear, mut rng: impl Rng) -> Self::Output {
+    fn rec_with_ran(
+        &mut self,
+        rec: RatRecLinear,
+        mut rng: impl Rng,
+    ) -> Self::Output {
         let z: [Z64<P0>; N] = [(); N].map(|_| rng.gen());
         let mut num_pows = [0; N];
         let mut den_pows = [0; N];
@@ -158,15 +165,13 @@ where
                 z[i] += y;
                 self.try_eval(&z)
             };
-            let res = q.rec_with_ran(
-                ThieleRec::new(rec.extra_pts()),
-                &mut rng
-            )?;
+            let res =
+                q.rec_with_ran(ThieleRec::new(rec.extra_pts()), &mut rng)?;
             let res: Rat<DensePoly<_>> = res.into();
             num_pows[i] = res.num().len() as u32;
             den_pows[i] = res.den().len() as u32;
             if num_pows[i] == 0 {
-                return Some(Zero::zero())
+                return Some(Zero::zero());
             }
         }
         debug!("Numerator powers: {num_pows:?}");
@@ -179,8 +184,8 @@ where
                 let z: [Z64<P0>; N] = [(); N].map(|_| rng.gen());
                 self.try_eval(&z).map(|q_z| (z, q_z))
             })
-                .flatten()
-                .take(num.len() + den.len() + rec.extra_pts() - 1)
+            .flatten()
+            .take(num.len() + den.len() + rec.extra_pts() - 1),
         );
         let ansatz = Rat::from_num_den_unchecked(num, den);
         debug!("Trying rational reconstruction over characteristic {P0}");
@@ -226,7 +231,9 @@ where
     }
 }
 
-fn gen_poly_with_max_pows<const N: usize>(max_pows: [u32; N]) -> FlatPoly<Unit, N> {
+fn gen_poly_with_max_pows<const N: usize>(
+    max_pows: [u32; N],
+) -> FlatPoly<Unit, N> {
     let num_terms = nterms_with_max_pows(max_pows);
     let mut terms = Vec::with_capacity(num_terms);
     for mut i in 0..(num_terms as u32) {
@@ -250,10 +257,10 @@ mod tests {
 
     use crate::sparse_poly::FlatMono;
     use crate::traits::Zero;
+    use paste::paste;
     use rand::SeedableRng;
     use rug::integer::Order;
     use seq_macro::seq;
-    use paste::paste;
 
     const NTESTS: usize = 100;
     const EXTRA_SAMPLES: usize = 10;
@@ -283,9 +290,7 @@ mod tests {
 
     fn rand_poly<const N: usize>(mut rng: impl Rng) -> FlatPoly<Integer, N> {
         let nterms = rng.gen_range(0..=MAX_TERMS);
-        FlatPoly::from_terms(
-            (0..nterms).map(|_| rand_term(&mut rng)).collect(),
-        )
+        FlatPoly::from_terms((0..nterms).map(|_| rand_term(&mut rng)).collect())
     }
 
     fn rand_rat<const N: usize>(
@@ -327,5 +332,4 @@ mod tests {
             }
         }
     });
-
 }

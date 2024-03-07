@@ -1,8 +1,25 @@
 use ffnt::Z64;
-use log::{warn, debug, trace};
+use log::{debug, trace, warn};
 use rug::Integer;
 
-use crate::{algebra::{poly::{flat::{FlatPoly, FlatMono}, dense::DensePoly}, rat::{Rat, NoneError}}, traits::{One, Zero, TryEval}, rec::{probe::Probe, rat::finite::{linear::{RecLinear, Unit, UNIT}, thiele::ThieleRec}}, rec::rat::ffrat::FFRat};
+use crate::{
+    algebra::{
+        poly::{
+            dense::DensePoly,
+            flat::{FlatMono, FlatPoly},
+        },
+        rat::{NoneError, Rat},
+    },
+    rec::rat::ffrat::FFRat,
+    rec::{
+        probe::Probe,
+        rat::finite::{
+            linear::{RecLinear, Unit, UNIT},
+            thiele::ThieleRec,
+        },
+    },
+    traits::{One, TryEval, Zero},
+};
 
 /// Reconstruction status
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -14,7 +31,10 @@ pub enum Status<const P: u64, const N: usize> {
     /// `next_arg`. Other arguments are also acceptable, as long as
     /// they only differ in the nth coordinate. If `next_arg` is
     /// `None`, any argument will do.
-    Degrees{n: usize, next_arg: Option<[Z64<P>; N]>},
+    Degrees {
+        n: usize,
+        next_arg: Option<[Z64<P>; N]>,
+    },
     /// Reconstructing the rational function.
     ///
     /// The argument is the estimated number of probes that will be needed
@@ -46,24 +66,26 @@ impl<const P: u64, const N: usize> Rec<P, N> {
             powers: [[0; 2]; N],
             degree_rec: ThieleRec::new(extra_pts),
             rat: Default::default(),
-            res: Err(NoneError {  }),
-            status: Status::Degrees { n: 0, next_arg: None }
+            res: Err(NoneError {}),
+            status: Status::Degrees {
+                n: 0,
+                next_arg: None,
+            },
         }
     }
 
-    pub fn add_pt(
-        &mut self,
-        z: [Z64<P>; N],
-        q_z: Z64<P>,
-    ) ->  Status<P, N> {
-        use std::ops::ControlFlow::{Continue, Break};
+    pub fn add_pt(&mut self, z: [Z64<P>; N], q_z: Z64<P>) -> Status<P, N> {
+        use std::ops::ControlFlow::{Break, Continue};
         use Status::Degrees;
-        let Degrees{n, next_arg} = self.status() else {
+        let Degrees { n, next_arg } = self.status() else {
             warn!("Not reconstructing degrees, ignoring single point");
-            return self.status()
+            return self.status();
         };
         if let Some(next_arg) = next_arg {
-            let shift_ok = z.iter().copied().zip(next_arg)
+            let shift_ok = z
+                .iter()
+                .copied()
+                .zip(next_arg)
                 .enumerate()
                 .all(|(m, (z, zp))| n == m || z == zp);
             if !shift_ok {
@@ -75,26 +97,30 @@ impl<const P: u64, const N: usize> Rec<P, N> {
             Continue(()) => {
                 let mut next_arg = z;
                 next_arg[n] += Z64::one();
-                self.status = Degrees { n, next_arg: Some(next_arg) };
-            },
+                self.status = Degrees {
+                    n,
+                    next_arg: Some(next_arg),
+                };
+            }
             Break(()) => {
                 let rat = std::mem::replace(
                     &mut self.degree_rec,
-                    ThieleRec::new(self.extra_pts)
-                ).into_rat();
+                    ThieleRec::new(self.extra_pts),
+                )
+                .into_rat();
                 let rat: Rat<DensePoly<_>> = rat.into();
                 let num_pow = rat.num().len().try_into().unwrap();
                 let den_pow = rat.den().len().try_into().unwrap();
                 self.powers[n] = [num_pow, den_pow];
-                debug!(
-                    "Powers in variable {n}: {:?}",
-                    self.powers[n]
-                );
+                debug!("Powers in variable {n}: {:?}", self.powers[n]);
                 if num_pow == 0 {
                     self.res = Ok(Zero::zero());
                     self.status = Status::Done;
                 } else if n + 1 < self.powers.len() {
-                    self.status = Degrees { n: n + 1, next_arg: None }
+                    self.status = Degrees {
+                        n: n + 1,
+                        next_arg: None,
+                    }
                 } else {
                     let nnum = nterms_with_max_pows(self.num_pows());
                     let nden = nterms_with_max_pows(self.den_pows());
@@ -103,19 +129,17 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                         // reconstruction over the first finite field
                         let ncoeff = rat.num().len() + rat.den().len() - 1;
                         let (num, den) = rat.into_num_den();
-                        let rat: Rat<FlatPoly<Z64<P>, 1>> = Rat::from_num_den_unchecked(
-                            num.into(),
-                            den.into()
-                        );
+                        let rat: Rat<FlatPoly<Z64<P>, 1>> =
+                            Rat::from_num_den_unchecked(num.into(), den.into());
                         assert_eq!(N, 1);
                         // SAFETY: the above assert
-                        let rat: Rat<FlatPoly<Z64<P>, N>> = unsafe {
-                            std::mem::transmute(rat)
-                        };
+                        let rat: Rat<FlatPoly<Z64<P>, N>> =
+                            unsafe { std::mem::transmute(rat) };
                         self.rat = FFRat::from(rat);
                         self.status = Status::Rat(ncoeff);
                     } else {
-                        self.status = Status::Rat(nnum + nden + self.extra_pts - 1);
+                        self.status =
+                            Status::Rat(nnum + nden + self.extra_pts - 1);
                     }
                 }
             }
@@ -125,10 +149,10 @@ impl<const P: u64, const N: usize> Rec<P, N> {
 
     pub fn add_pts<'a, const Q: u64>(
         &mut self,
-        pts: &'a [Probe<Q, N>]
+        pts: &'a [Probe<Q, N>],
     ) -> Status<P, N> {
         match self.status() {
-            Status::Degrees{..} => {
+            Status::Degrees { .. } => {
                 if Q == P {
                     // cast to the correct type
                     // SAFETY: we just checked that the type is actually &'a [Probe<P, N>]
@@ -136,30 +160,29 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                     let pts: &'a [_] = unsafe {
                         std::slice::from_raw_parts(pts.as_ptr() as _, pts.len())
                     };
-                    for Probe{arg, val} in pts.iter().copied() {
+                    for Probe { arg, val } in pts.iter().copied() {
                         let status = self.add_pt(arg, val);
-                        if !matches!(status, Status::Degrees{..}) {
+                        if !matches!(status, Status::Degrees { .. }) {
                             break;
                         }
                     }
                 } else {
                     warn!("Ignoring points in characteristic {Q}, need characteristic {P}");
                 }
-            },
-            Status::Rat(_) => if self.rat.modulus.is_zero() {
-                self.rec_first_rat_mod(pts)
-            } else {
-                self.rec_rat_mod(pts)
-            },
-            Status::Done => { },
+            }
+            Status::Rat(_) => {
+                if self.rat.modulus.is_zero() {
+                    self.rec_first_rat_mod(pts)
+                } else {
+                    self.rec_rat_mod(pts)
+                }
+            }
+            Status::Done => {}
         }
         self.status()
     }
 
-    fn rec_first_rat_mod<const Q: u64>(
-        &mut self,
-        pts: &[Probe<Q, N>],
-    ) {
+    fn rec_first_rat_mod<const Q: u64>(&mut self, pts: &[Probe<Q, N>]) {
         let num = gen_poly_with_max_pows(self.num_pows());
         let den = gen_poly_with_max_pows(self.den_pows());
         let ansatz = Rat::from_num_den_unchecked(num, den);
@@ -168,20 +191,19 @@ impl<const P: u64, const N: usize> Rec<P, N> {
         if let Some(next_mod_rec) = ansatz.rec_linear(pts) {
             debug!("Finished reconstruction modulo {Q}: {next_mod_rec}");
             self.rat = FFRat::from(next_mod_rec);
-            let ncoeff = self.rat.rat.num().len() + self.rat.rat.den().len() - 1;
+            let ncoeff =
+                self.rat.rat.num().len() + self.rat.rat.den().len() - 1;
             self.status = Status::Rat(ncoeff);
         };
     }
 
-    fn rec_rat_mod<const Q: u64>(
-        &mut self,
-        pts: &[Probe<Q, N>],
-    ) {
+    fn rec_rat_mod<const Q: u64>(&mut self, pts: &[Probe<Q, N>]) {
         // if we can already reproduce the points we are done
         if let Ok(res) = self.res.as_ref() {
             if pts.len() >= self.extra_pts {
-                let sample_same = pts.iter()
-                    .all(|Probe{ arg, val }| res.try_eval(arg) == Some(*val));
+                let sample_same = pts
+                    .iter()
+                    .all(|Probe { arg, val }| res.try_eval(arg) == Some(*val));
 
                 if sample_same {
                     self.status = Status::Done;
@@ -198,7 +220,7 @@ impl<const P: u64, const N: usize> Rec<P, N> {
         };
         debug!("Finished reconstruction modulo {Q}: {next_mod_rec}");
         self.rat.merge_crt(next_mod_rec);
-        self.res  = (&self.rat).try_into();
+        self.res = (&self.rat).try_into();
     }
 
     fn num_pows(&self) -> [u32; N] {
@@ -232,13 +254,13 @@ impl<const P: u64, const N: usize> Rec<P, N> {
     }
 }
 
-fn nterms_with_max_pows<const N: usize>(
-    max_pows: [u32; N]
-) -> usize {
+fn nterms_with_max_pows<const N: usize>(max_pows: [u32; N]) -> usize {
     max_pows.iter().map(|&n| n as usize).product()
 }
 
-fn gen_poly_with_max_pows<const N: usize>(max_pows: [u32; N]) -> FlatPoly<Unit, N> {
+fn gen_poly_with_max_pows<const N: usize>(
+    max_pows: [u32; N],
+) -> FlatPoly<Unit, N> {
     let num_terms = nterms_with_max_pows(max_pows);
     let mut terms = Vec::with_capacity(num_terms);
     for mut i in 0..(num_terms as u32) {
@@ -295,9 +317,7 @@ mod tests {
 
     fn rand_poly<const N: usize>(mut rng: impl Rng) -> FlatPoly<Integer, N> {
         let nterms = rng.gen_range(0..=MAX_TERMS);
-        FlatPoly::from_terms(
-            (0..nterms).map(|_| rand_term(&mut rng)).collect(),
-        )
+        FlatPoly::from_terms((0..nterms).map(|_| rand_term(&mut rng)).collect())
     }
 
     fn rand_rat<const N: usize>(

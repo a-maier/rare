@@ -19,11 +19,17 @@ use rand::Rng;
 
 use crate::{
     algebra::{
-        poly::{dense::DensePoly, flat::{FlatPoly, FlatMono}},
-        rat::Rat
+        poly::{
+            dense::DensePoly,
+            flat::{FlatMono, FlatPoly},
+        },
+        rat::Rat,
     },
     arr::Arr,
-    rec::rat::finite::{linear::{LinearRec, RecLinear}, thiele::ThieleRec},
+    rec::rat::finite::{
+        linear::{LinearRec, RecLinear},
+        thiele::ThieleRec,
+    },
     traits::{Eval, One, Rec, Shift, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS_Z},
 };

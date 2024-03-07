@@ -4,25 +4,25 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 use rare::{
+    _test_util::{
+        gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2,
+        gen_sparse_rat,
+    },
     algebra::poly::{
         dense::{DensePoly, DensePoly2},
-        flat::FlatPoly
+        flat::FlatPoly,
     },
+    rat::Rat,
     rec::{
         poly::finite::newton::{NewtonPoly, NewtonPoly2, NewtonRec},
         rat::finite::{
             cuyt_lee::RatRecMod,
             linear::{LinearRec, RecLinear},
-            thiele::{ThieleRat, ThieleRec}
-        }
+            thiele::{ThieleRat, ThieleRec},
+        },
     },
-    _test_util::{
-        gen_dense_poly1, gen_dense_poly2, gen_dense_rat1, gen_dense_rat2,
-        gen_sparse_rat,
-    },
-    rat::Rat,
     traits::{Eval, Rec, TryEval},
-    Z64
+    Z64,
 };
 
 fn rec_poly1<const P: u64>(

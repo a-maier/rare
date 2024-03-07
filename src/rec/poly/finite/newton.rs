@@ -11,7 +11,7 @@ use rand::{thread_rng, Rng};
 use crate::{
     algebra::poly::dense::DensePoly,
     rand::pt_iter,
-    traits::{Eval, TryEval, One, Rec, WithVars, Zero},
+    traits::{Eval, One, Rec, TryEval, WithVars, Zero},
     util::{slice_start, ALL_VARS},
 };
 

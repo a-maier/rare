@@ -8,7 +8,10 @@ use rug::{ops::NegAssign, Integer, Rational};
 use thiserror::Error;
 
 use crate::{
-    algebra::poly::{dense::DensePoly, flat::{FlatMono, FlatPoly}},
+    algebra::poly::{
+        dense::DensePoly,
+        flat::{FlatMono, FlatPoly},
+    },
     arr::Arr,
     traits::{One, TryEval, WithVars, Zero},
 };
@@ -93,7 +96,8 @@ where
     }
 }
 
-impl<'a, 'b, N, D, S: Display, const Z: usize> WithVars<'a, &'b [S; Z]> for Rat<N, D>
+impl<'a, 'b, N, D, S: Display, const Z: usize> WithVars<'a, &'b [S; Z]>
+    for Rat<N, D>
 where
     N: WithVars<'a, &'b [S; Z]> + 'a,
     D: WithVars<'a, &'b [S; Z]> + 'a,

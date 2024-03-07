@@ -7,8 +7,11 @@ use seq_macro::seq;
 
 use crate::{
     algebra::{
-        poly::{dense::{DensePoly, DensePoly1}, flat::{FlatPoly, FlatMono}},
-        rat::Rat
+        poly::{
+            dense::{DensePoly, DensePoly1},
+            flat::{FlatMono, FlatPoly},
+        },
+        rat::Rat,
     },
     traits::{One, TryEval, Zero},
 };

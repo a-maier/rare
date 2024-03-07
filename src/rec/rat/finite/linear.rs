@@ -6,8 +6,11 @@ use num_integer::Roots;
 
 use crate::{
     algebra::{
-        poly::{dense::DensePoly, flat::{FlatMono, FlatPoly}},
-        rat::Rat
+        poly::{
+            dense::DensePoly,
+            flat::{FlatMono, FlatPoly},
+        },
+        rat::Rat,
     },
     matrix::Matrix,
     rand::pt_iter,

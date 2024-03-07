@@ -10,7 +10,7 @@ use rand::{thread_rng, Rng};
 use crate::{
     algebra::{
         poly::{dense::DensePoly, flat::FlatPoly},
-        rat::Rat
+        rat::Rat,
     },
     rand::pt_iter,
     traits::{One, Rec, TryEval, WithVars, Zero},

@@ -6,22 +6,19 @@ use rug::Integer;
 use seq_macro::seq;
 
 use crate::{
-    algebra::{
-        poly::flat::FlatPoly,
-        rat::Rat
-    },
+    algebra::{poly::flat::FlatPoly, rat::Rat},
     rec::{
+        primes::LARGE_PRIMES,
         rat::{
+            ffrat::FFRat,
             finite::{cuyt_lee::RatRecMod, linear::RecLinear},
-            ffrat::FFRat
         },
-        primes::LARGE_PRIMES
     },
     traits::{Rec, TryEval},
 };
 
 #[allow(deprecated)]
-use crate::rec_rat::{RatRec, normalise_coeff};
+use crate::rec_rat::{normalise_coeff, RatRec};
 
 seq!(N in 0..114 {
     paste! { const [<P N>]: u64 = LARGE_PRIMES[N]; }

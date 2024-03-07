@@ -4,9 +4,9 @@ use rug::{Integer, Rational};
 use crate::{
     algebra::{
         poly::flat::{FlatMono, FlatPoly},
-        rat::{NoneError, Rat}
+        rat::{NoneError, Rat},
     },
-    rec::crt::{rat_reconstruct, merge_crt},
+    rec::crt::{merge_crt, rat_reconstruct},
 };
 
 /// rational function over finite characteristic that does not necessarily fit in a `Z64`
@@ -43,9 +43,7 @@ impl<const N: usize> FFRat<N> {
     }
 }
 
-impl<const P: u64, const N: usize> From<Rat<FlatPoly<Z64<P>, N>>>
-    for FFRat<N>
-{
+impl<const P: u64, const N: usize> From<Rat<FlatPoly<Z64<P>, N>>> for FFRat<N> {
     fn from(source: Rat<FlatPoly<Z64<P>, N>>) -> Self {
         let rat = source.into();
         Self {
@@ -55,9 +53,7 @@ impl<const P: u64, const N: usize> From<Rat<FlatPoly<Z64<P>, N>>>
     }
 }
 
-impl<'a, const N: usize> TryFrom<&'a FFRat<N>>
-    for Rat<FlatPoly<Rational, N>>
-{
+impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<FlatPoly<Rational, N>> {
     type Error = NoneError;
 
     fn try_from(source: &'a FFRat<N>) -> Result<Self, Self::Error> {
