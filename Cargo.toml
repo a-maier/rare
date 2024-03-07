@@ -36,5 +36,5 @@ name = "bench"
 harness = false
 
 [features]
-default = ["recfn"]
+default = []
 recfn = []
