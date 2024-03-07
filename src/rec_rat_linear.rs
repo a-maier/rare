@@ -322,7 +322,7 @@ fn get_longest_streak<const N: usize>(
             coord[ncoord] = 0;
             coord
         });
-        let streak = longest_streak_pos_by(&pts, |a, b| {
+        let streak = longest_streak_pos_by(pts, |a, b| {
             let mut a_coord = a.0;
             a_coord[ncoord] = 0;
             let mut b_coord = b.0;

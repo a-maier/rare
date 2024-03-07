@@ -172,8 +172,8 @@ impl<'a, 'b, S: Display, const P: u64, const Z: usize> Display
         write!(
             f,
             "({})/({})",
-            rat.num().with_vars(&self.var),
-            rat.den().with_vars(&self.var)
+            rat.num().with_vars(self.var),
+            rat.den().with_vars(self.var)
         )
     }
 }
@@ -189,8 +189,8 @@ impl<'a, 'b, S: Display, const Z: usize> Display
         write!(
             f,
             "({})/({})",
-            rat.num().with_vars(&self.var),
-            rat.den().with_vars(&self.var)
+            rat.num().with_vars(self.var),
+            rat.den().with_vars(self.var)
         )
     }
 }
