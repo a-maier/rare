@@ -36,3 +36,7 @@ rand_xoshiro = "0.6"
 [[bench]]
 name = "bench"
 harness = false
+
+[features]
+default = ["recfn"]
+recfn = []
