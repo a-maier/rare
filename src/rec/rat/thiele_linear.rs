@@ -2,7 +2,7 @@ use ffnt::Z64;
 use log::{warn, debug, trace};
 use rug::Integer;
 
-use crate::{algebra::{poly::{flat::{FlatPoly, FlatMono}, dense::DensePoly}, rat::{Rat, NoneError}}, traits::{One, Zero, TryEval}, rec::{probe::Probe, rat::finite::{linear::{RecLinear, Unit, UNIT}, thiele::ThieleRec}}, rec::rat::ffrat::{combine_crt_rat, FFRat}};
+use crate::{algebra::{poly::{flat::{FlatPoly, FlatMono}, dense::DensePoly}, rat::{Rat, NoneError}}, traits::{One, Zero, TryEval}, rec::{probe::Probe, rat::finite::{linear::{RecLinear, Unit, UNIT}, thiele::ThieleRec}}, rec::rat::ffrat::FFRat};
 
 /// Reconstruction status
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -197,8 +197,7 @@ impl<const P: u64, const N: usize> Rec<P, N> {
             return;
         };
         debug!("Finished reconstruction modulo {Q}: {next_mod_rec}");
-        let mod_rec = std::mem::take(&mut self.rat);
-        self.rat = combine_crt_rat(mod_rec, next_mod_rec);
+        self.rat.merge_crt(next_mod_rec);
         self.res  = (&self.rat).try_into();
     }
 

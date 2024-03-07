@@ -15,7 +15,7 @@ use crate::{
     rec::{
         rat::{
             finite::{cuyt_lee::{self, RatRecMod}, linear::RecLinear},
-            ffrat::{FFRat, combine_crt_rat}
+            ffrat::FFRat
         },
         primes::LARGE_PRIMES
     },
@@ -175,8 +175,7 @@ seq! {N in 2..=16 {
                 };
                 let next_mod_rec = normalise_coeff(next_mod_rec);
                 debug!("Finished reconstruction modulo {P}: {next_mod_rec}");
-                let mod_rec = std::mem::take(&mut self.rat);
-                self.rat = combine_crt_rat(mod_rec, next_mod_rec);
+                self.rat.merge_crt(next_mod_rec);
                 self.res  = (&self.rat).try_into();
                 self.ask_for_new_mod()
             }
@@ -393,7 +392,7 @@ where
             let next_mod_rec = mod_rec.rat.rec_linear(pts)?;
             let next_mod_rec = normalise_coeff(next_mod_rec);
             debug!("Reconstructed {next_mod_rec}");
-            mod_rec = combine_crt_rat(mod_rec, next_mod_rec);
+            mod_rec.merge_crt(next_mod_rec);
             res  = (&mod_rec).try_into();
         }});
 

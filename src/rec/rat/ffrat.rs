@@ -16,6 +16,33 @@ pub(crate) struct FFRat<const N: usize> {
     pub(crate) modulus: Integer,
 }
 
+impl<const N: usize> FFRat<N> {
+    pub(crate) fn merge_crt<const P: u64>(
+        &mut self,
+        new_rat: Rat<FlatPoly<Z64<P>, N>>,
+    ) {
+        let (num, den) = std::mem::take(&mut self.rat).into_num_den();
+        let (new_num, new_den) = new_rat.into_num_den();
+        debug_assert_eq!(num.len(), new_num.len());
+        debug_assert_eq!(den.len(), new_den.len());
+        let mut num = num.into_terms();
+        let mut den = den.into_terms();
+        let new_num = new_num.into_terms();
+        let new_den = new_den.into_terms();
+
+        let terms = num.iter_mut().chain(den.iter_mut());
+        let new_terms = new_num.into_iter().chain(new_den);
+        for (term, new_term) in terms.zip(new_terms) {
+            debug_assert_eq!(term.powers, new_term.powers);
+            merge_crt(&mut term.coeff, new_term.coeff, &self.modulus);
+        }
+        let num = FlatPoly::from_raw_terms(num);
+        let den = FlatPoly::from_raw_terms(den);
+        self.rat = Rat::from_num_den_unchecked(num, den);
+        self.modulus *= P;
+    }
+}
+
 impl<const P: u64, const N: usize> From<Rat<FlatPoly<Z64<P>, N>>>
     for FFRat<N>
 {
@@ -59,34 +86,5 @@ impl<'a, const N: usize> TryFrom<&'a FFRat<N>> for Rat<FlatPoly<Integer, N>> {
 
     fn try_from(source: &'a FFRat<N>) -> Result<Self, Self::Error> {
         Rat::<FlatPoly<Rational, N>>::try_from(source).map(|r| r.into())
-    }
-}
-
-pub(crate) fn combine_crt_rat<const P: u64, const N: usize>(
-    rat: FFRat<N>,
-    new_rat: Rat<FlatPoly<Z64<P>, N>>,
-) -> FFRat<N> {
-    let (num, den) = rat.rat.into_num_den();
-    let modulus = rat.modulus;
-    let (new_num, new_den) = new_rat.into_num_den();
-    debug_assert_eq!(num.len(), new_num.len());
-    debug_assert_eq!(den.len(), new_den.len());
-    let mut num = num.into_terms();
-    let mut den = den.into_terms();
-    let new_num = new_num.into_terms();
-    let new_den = new_den.into_terms();
-
-    let terms = num.iter_mut().chain(den.iter_mut());
-    let new_terms = new_num.into_iter().chain(new_den);
-    for (term, new_term) in terms.zip(new_terms) {
-        debug_assert_eq!(term.powers, new_term.powers);
-        merge_crt(&mut term.coeff, new_term.coeff, &modulus);
-    }
-    let num = FlatPoly::from_raw_terms(num);
-    let den = FlatPoly::from_raw_terms(den);
-    let rat = Rat::from_num_den_unchecked(num, den);
-    FFRat {
-        rat,
-        modulus: modulus * P,
     }
 }

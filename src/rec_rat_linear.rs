@@ -16,7 +16,7 @@ use crate::{
     rec::{
         primes::LARGE_PRIMES,
         rat::{
-            ffrat::{combine_crt_rat, FFRat},
+            ffrat::FFRat,
             finite::{
                 linear::{RecLinear, Unit, UNIT},
                 thiele::ThieleRec
@@ -268,7 +268,7 @@ where
 
             let next_mod_rec = mod_rec.rat.rec_linear(pts)?;
             debug!("Reconstructed {next_mod_rec}");
-            mod_rec = combine_crt_rat(mod_rec, next_mod_rec);
+            mod_rec.merge_crt(next_mod_rec);
             res  = (&mod_rec).try_into();
         }});
 
@@ -431,7 +431,7 @@ fn add_rec_mod<const P: u64, const N: usize>(
         debug!("Reconstruction over mod {P} did not reach powers {num_pows:?}, {den_pows:?}");
         return Break(Err(FailedRec::MorePts{modulus: P, nexpected: None}))
     }
-    *rat = combine_crt_rat(std::mem::take(rat), next_mod_rec);
+    rat.merge_crt(next_mod_rec);
     *res  = (&*rat).try_into();
     Continue(())
 }
