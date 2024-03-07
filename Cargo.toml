@@ -10,11 +10,9 @@ keywords = []
 categories = ["Mathematics"]
 
 [dependencies]
-ahash = "0.8"
 array-init = "2.1"
 ffnt = { version = "0.6", features = ["num-traits", "rand"] }
 itertools = "0.12"
-lazy_static = "1.4"
 log = "0.4"
 num-integer = "0.1"
 num-traits = "0.2"
