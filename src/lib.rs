@@ -30,6 +30,8 @@ pub mod rec_linear;
 pub mod rec_rat_mod;
 #[deprecated]
 pub mod rec_rat;
+mod rec_rat_fn;
+mod rec_rat_fn_linear;
 
 pub use ffnt::Z64;
 pub use rug::Integer;
