@@ -1,3 +1,5 @@
+/// Cuyt-Lee reconstruction over each characteristic
+pub mod cuyt_lee;
 /// Reconstruction over finite fields
 pub mod finite;
 /// Combination of Thiele reconstruction and solving linear systems of equations

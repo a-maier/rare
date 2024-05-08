@@ -199,7 +199,9 @@ macro_rules! impl_rat_rec_mod_recursive {
                         if self.rat_in_t_rec.rec_started() {
                             assert_eq!(x_pt[..$n_minus_one], self.base_x_pt[..$n_minus_one]);
                         } else {
-                            debug!("Starting multivariate rational reconstruction with base point {x_pt:?}");
+                            debug!("Starting multivariate rational reconstruction");
+                            debug!("Base point {x_pt:?}");
+                            debug!("Shift {:?}", self.shift);
                             self.base_x_pt = x_pt;
                         }
                         let t = *x_pt.last().unwrap();
