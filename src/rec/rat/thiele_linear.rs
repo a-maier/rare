@@ -283,7 +283,7 @@ mod tests {
     use ::rand::{Rng, SeedableRng};
 
     use crate::rec::primes::LARGE_PRIMES;
-    use crate::sparse_poly::FlatMono;
+    use crate::algebra::poly::flat::FlatMono;
     use crate::traits::Zero;
     use paste::paste;
     use rug::integer::Order;

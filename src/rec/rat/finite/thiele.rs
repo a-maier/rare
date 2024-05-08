@@ -305,7 +305,6 @@ mod tests {
 
     use crate::{
         _test_util::{gen_dense_rat1, sample_eq},
-        dense_poly::DensePoly,
         traits::TryEval,
     };
 

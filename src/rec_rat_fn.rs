@@ -17,14 +17,10 @@ use crate::{
     traits::{Rec, TryEval},
 };
 
-#[allow(deprecated)]
-use crate::rec_rat::{normalise_coeff, RatRec};
-
 seq!(N in 0..114 {
     paste! { const [<P N>]: u64 = LARGE_PRIMES[N]; }
 });
 
-#[allow(deprecated)]
 impl<F, const N: usize> Rec<RatRec, [Integer; N]> for F
 where
     F: Rec<

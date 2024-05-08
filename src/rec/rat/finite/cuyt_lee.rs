@@ -698,8 +698,8 @@ mod tests {
     use rand_xoshiro::rand_core::SeedableRng;
 
     use crate::{
-        sparse_poly::FlatMono,
         traits::{One, TryEval, Zero},
+        algebra::poly::flat::FlatMono,
     };
 
     use super::*;

@@ -14,26 +14,10 @@ pub mod algebra;
 /// Function reconstruction algorithms
 pub mod rec;
 
-#[deprecated(note = "Use rare::algebra::poly::dense instead")]
-pub mod dense_poly;
-#[deprecated(note = "Use rare::algebra::rat instead")]
-pub mod rat;
-#[deprecated(note = "Use rare::rec::rat::finite::linear instead")]
-pub mod rec_linear;
-#[deprecated(note = "Use rare::rec::poly::finite::newton instead")]
-pub mod rec_newton;
-#[deprecated]
-pub mod rec_rat;
-#[cfg(feature = "recfn")]
-mod rec_rat_fn;
+// #[cfg(feature = "recfn")]
+// mod rec_rat_fn;
 #[cfg(feature = "recfn")]
 mod rec_rat_fn_linear;
-#[deprecated(note = "Use rare::rec::rat::finite::cuyt_lee instead")]
-pub mod rec_rat_mod;
-#[deprecated(note = "Use rare::rec::rat::finite::thiele instead")]
-pub mod rec_thiele;
-#[deprecated(note = "Use rare::algebra::poly::flat instead")]
-pub mod sparse_poly;
 
 pub use ffnt::Z64;
 pub use rug::Integer;
