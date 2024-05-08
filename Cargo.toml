@@ -11,7 +11,7 @@ categories = ["Mathematics"]
 
 [dependencies]
 array-init = "2.1"
-ffnt = { version = "0.6", features = ["num-traits", "rand"] }
+ffnt = { version = "0.7", features = ["num-traits", "rand"] }
 itertools = "0.12"
 log = "0.4"
 num-integer = "0.1"
