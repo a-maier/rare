@@ -1,8 +1,9 @@
-use std::ops::ControlFlow;
+use std::{any::Any, fmt::{self, Display}, ops::ControlFlow};
 
 use ffnt::Z64;
-use log::debug;
+use log::{debug, trace};
 use paste::paste;
+use seq_macro::seq;
 use thiserror::Error;
 
 use crate::{
@@ -11,8 +12,7 @@ use crate::{
         rat::{NoneError, Rat},
     },
     rec::{
-        primes::LARGE_PRIMES,
-        rat::{ffrat::FFRat, finite::cuyt_lee::Needed},
+        primes::LARGE_PRIMES, rat::{ffrat::FFRat, finite::cuyt_lee::{Needed as ModNeeded, z_to_x}}
     },
     traits::TryEval,
     Integer,
@@ -22,14 +22,21 @@ use crate::{
 pub enum Status<const P: u64, const N: usize> {
     #[default]
     NextMod,
-    Needed(Needed<P, N>),
+    Needed(ModNeeded<P, N>),
     Done,
 }
 
-impl<const P: u64, const N: usize> From<Needed<P, N>> for Status<P, N> {
-    fn from(value: Needed<P, N>) -> Self {
+impl<const P: u64, const N: usize> From<ModNeeded<P, N>> for Status<P, N> {
+    fn from(value: ModNeeded<P, N>) -> Self {
         Status::Needed(value)
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+enum SampleRes {
+    Complete,
+    Continue,
+    Reset,
 }
 
 const P0: u64 = LARGE_PRIMES[0];
@@ -50,7 +57,7 @@ macro_rules! impl_rat_rec {
                     status: Status<P0, $n>,
                     modulus: u64,
                     sample_agree: usize,
-                    shift: [i64; $n],
+                    shift: [u64; $n],
                 }
 
                 impl [<Rec $n>] {
@@ -62,7 +69,7 @@ macro_rules! impl_rat_rec {
                     /// rational function are zero.
                     pub fn with_shift(
                         extra_pts: usize,
-                        shift: [i64; $n],
+                        shift: [u64; $n],
                     ) -> Self {
                         Self {
                             extra_pts,
@@ -81,13 +88,13 @@ macro_rules! impl_rat_rec {
                         z: [Z64<P>; $n],
                         q_z: Z64<P>,
                     ) -> Result<(), RecError> {
-                        if self.status == Status::Done || self.sample_done(z, q_z) {
+                        if self.status == Status::Done || self.sample(z, q_z) == SampleRes::Complete {
                             return Ok(());
                         }
                         if self.status == Status::NextMod {
                             debug!("New characteristic: {P}");
                             self.modulus = P;
-                            let shift = self.shift.map(Z64::<P>::new);
+                            let shift = self.shift.map(Z64::<P>::from);
                             let rec = [<RatRecMod $n>]::<P>::with_shift(self.extra_pts(), shift);
                             // Safety: RatRecMod<P> should have the same binary layout for all P
                             self.rec = unsafe {
@@ -101,37 +108,108 @@ macro_rules! impl_rat_rec {
                             std::mem::transmute(&mut self.rec)
                         };
                         let res = rec.add_pt(z, q_z);
-                        match res {
-                            ControlFlow::Break(()) => self.next_mod::<P>(),
-                            ControlFlow::Continue(needed) => {
-                                let status: Status<P, $n> = needed.into();
-                                // Safety:
-                                assert_eq!(P, self.modulus);
-                                self.status = unsafe {
-                                    std::mem::transmute(status)
-                                };
-                            },
-                        }
+                        self.update_status(res);
                         Ok(())
                     }
 
                     pub fn add_pts<'a, const P: u64>(
                         &mut self,
-                        pts: &[([Z64<P>; $n], Z64<P>)],
+                        mut pts: &[([Z64<P>; $n], Z64<P>)],
                     ) -> Result<(), RecError> {
-                        if self.status == Status::Done
-                            || pts.iter().map(|(z, q_z)| self.sample_done(*z, *q_z)).last().unwrap_or(false) {
-                                return Ok(());
+                        loop {
+                            match &self.status {
+                                Status::Done => return Ok(()),
+                                Status::NextMod => {
+                                    if P == self.modulus {
+                                        return Ok(());
+                                    }
+                                    let Some(((z, q_z), rest)) = pts.split_first() else {
+                                        return Ok(())
+                                    };
+                                    pts = rest;
+                                    self.add_pt(*z, *q_z)?;
+                                },
+                                Status::Needed(needed) => {
+                                    if P != self.modulus {
+                                        return Err(RecError::Mod{expected: self.modulus, found: P});
+                                    }
+                                    // Safety: we just checked that the actual modulus is P
+                                    let needed: &'a ModNeeded<P, $n> = unsafe {
+                                        std::mem::transmute(needed)
+                                    };
+                                    match needed {
+                                        ModNeeded::Pt(next_wanted) => {
+                                            trace!("next wanted point: {next_wanted:?}");
+                                            trace!(
+                                                "next wanted point (in x/t): {:?}",
+                                                z_to_x(*next_wanted, &self.shift.map(Z64::from))
+                                            );
+                                            let next_pos = pts.iter()
+                                                .position(|pt| &pt.0 == next_wanted);
+                                            let Some(next_pos) = next_pos else {
+                                                return Ok(())
+                                            };
+                                            trace!("adding point at {next_pos}");
+                                            let (z, q_z) = pts[next_pos];
+                                            self.add_pt(z, q_z)?;
+                                            pts = &pts[(next_pos + 1)..];
+                                        }
+                                        ModNeeded::Pts(next_wanted) => {
+                                            let sample = pts.iter()
+                                                .map(|(q, q_z)| self.sample(*q, *q_z))
+                                                .take_while(|&res| res != SampleRes::Reset)
+                                                .last();
+                                            if sample == Some(SampleRes::Complete) {
+                                                return Ok(());
+                                            }
+                                            trace!("next wanted points: {next_wanted:#?}");
+                                            trace!("next wanted points (in x/t):");
+                                            for z in next_wanted {
+                                                trace!("{:?}", z_to_x(*z, &self.shift.map(Z64::from)));
+                                            }
+                                            let next_pos = pts.iter().position(|pt| pt.0 == next_wanted[0]);
+                                            let Some(next_pos) = next_pos else {
+                                                return Ok(())
+                                            };
+                                            pts = &pts[next_pos..];
+                                            let has_wanted_pts = pts.iter()
+                                                .take(next_wanted.len())
+                                                .map(|pt| pt.0)
+                                                .eq(next_wanted.iter().copied());
+                                            if !has_wanted_pts {
+                                                return Ok(())
+                                            }
+                                            trace!("adding points from {next_pos} on");
+                                            let (wanted, rest) = pts.split_at(next_wanted.len());
+                                            pts = rest;
+                                            // Safety:
+                                            assert_eq!(self.modulus, P);
+                                            let rec: &'a mut [<RatRecMod $n>]<P> = unsafe {
+                                                std::mem::transmute(&mut self.rec)
+                                            };
+                                            let res = rec.add_pts(wanted);
+                                            self.update_status(res);
+                                        }
+                                    }
+                                }
                             }
-                        debug_assert_ne!(self.status, Status::NextMod);
-                        if P != self.modulus {
-                            return Err(RecError::Mod{expected: self.modulus, found: P});
                         }
-                        let rec: &'a mut [<RatRecMod $n>]<P> = unsafe {
-                            std::mem::transmute(&mut self.rec)
-                        };
-                        let res = rec.add_pts(pts);
-                        match res {
+                    }
+
+                    pub fn add_pts_unsorted<const P: u64>(
+                        &mut self,
+                        pts: &mut [([Z64<P>; $n], Z64<P>)],
+                    ) -> Result<(), RecError> {
+                        let shift = self.shift.map(Z64::<P>::from);
+                        pts.sort_by_cached_key(|pt| z_to_x(pt.0, &shift));
+                        self.add_pts(pts)
+                    }
+
+                    fn update_status<const P: u64>(
+                        &mut self,
+                        s: ControlFlow<(), ModNeeded<P, $n>>
+                    ) {
+                        match s {
                             ControlFlow::Break(()) => self.next_mod::<P>(),
                             ControlFlow::Continue(needed) => {
                                 let status: Status<P, $n> = needed.into();
@@ -142,29 +220,30 @@ macro_rules! impl_rat_rec {
                                 };
                             },
                         }
-                        Ok(())
                     }
 
-                    fn sample_done<const P: u64>(
+                    fn sample<const P: u64>(
                         &mut self,
                         z: [Z64<P>; $n],
                         q_z: Z64<P>,
-                    ) -> bool {
+                    ) -> SampleRes {
                         if let Ok(res) = self.res.as_ref() {
                             let our_q_z = res.try_eval(&z);
                             if our_q_z == Some(q_z) {
                                 self.sample_agree += 1;
                                 if self.sample_agree >= self.extra_pts {
                                     self.modulus = 0;
-                                    debug!("done");
+                                    debug!("Reconstructed function: {res}");
                                     self.status = Status::Done;
-                                    return true;
+                                    return SampleRes::Complete;
+                                } else {
+                                    return SampleRes::Continue;
                                 }
                             } else {
                                 self.sample_agree = 0;
                             }
                         }
-                        false
+                        SampleRes::Reset
                     }
 
                     /// The current reconstruction status with suggestions for the next step
@@ -226,9 +305,70 @@ macro_rules! impl_rat_rec {
                         self.status = Status::NextMod;
                     }
                 }
+
+                fn [<rec_from_pts $n>](
+                    pts: &mut [ModPts<$n>],
+                    shift: [u64; $n],
+                    extra_pts: usize,
+                ) -> Result<Rat<FlatPoly<Integer, $n>>, FailedRec<$n>> {
+                    let mut rec = [<Rec $n>]::with_shift(extra_pts, shift);
+                    pts.sort_by(
+                        |pt1, pt2| (pt2.pts.len(), pt2.modulus)
+                            .cmp(&(pt1.pts.len(), pt1.modulus))
+                    );
+                    for ModPts{modulus, pts} in pts.iter_mut() {
+                        seq!{ PP in 0..114 {{
+                            if *modulus == LARGE_PRIMES[PP] {
+                                const P: u64 = LARGE_PRIMES[PP];
+                                let pts = unsafe{
+                                    std::mem::transmute(pts.as_mut_slice())
+                                };
+                                rec.add_pts_unsorted::<P>(pts).unwrap();
+                                match rec.status {
+                                    Status::NextMod => {},
+                                    Status::Needed(needed) => {
+                                        let needed = match needed {
+                                            ModNeeded::Pt(z) => Needed::Pt(z.map(u64::from)),
+                                            ModNeeded::Pts(z) => Needed::Pts(
+                                                z.into_iter().map(|z| z.map(u64::from)).collect()
+                                            )
+                                        };
+                                        return Err(FailedRec::MorePts{
+                                            modulus: *modulus,
+                                            needed
+                                        });
+                                    },
+                                    Status::Done => return Ok(rec.into_rat().unwrap()),
+                                }
+                                continue;
+                            }
+                        }}}
+                        return Err(FailedRec::UnknownMod(*modulus));
+                    }
+                    let suggested_next_mod = find_largest_missing_mod(
+                        pts.iter().map(|pt| pt.modulus)
+                    );
+                    if let Some(next_mod) = suggested_next_mod {
+                        Err(FailedRec::MoreMods(next_mod))
+                    } else {
+                        Err(FailedRec::NoModsLeft)
+                    }
+                }
+
             }
         )*
     };
+}
+
+fn find_largest_missing_mod(
+    mods: impl Iterator<Item = u64>
+) -> Option<u64> {
+    use std::collections::BTreeSet;
+    let mut all_mods = BTreeSet::from_iter(LARGE_PRIMES);
+    for mmod in mods {
+        all_mods.remove(&mmod);
+    }
+    all_mods.pop_last()
 }
 
 impl_rat_rec! {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
@@ -237,6 +377,93 @@ impl_rat_rec! {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 pub enum RecError {
     #[error("Wrong characteristic: expected {expected}, got {found}")]
     Mod { expected: u64, found: u64 },
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct ModPts<const N: usize> {
+    pub modulus: u64,
+    pub pts: Vec<([u64; N], u64)>,
+}
+
+pub fn rec_from_pts<const N: usize>(
+    pts: &mut [ModPts<N>],
+    shift: [u64; N],
+    extra_pts: usize,
+) -> Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>> {
+    fn cast_res<const M: usize, const N: usize>(
+        res: Result<Rat<FlatPoly<Integer, M>>, FailedRec<M>>
+    ) -> Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>> {
+        let mut res = Some(res);
+        let res: &mut dyn Any = &mut res;
+        res.downcast_mut()
+            .and_then(Option::take)
+            .unwrap()
+    }
+
+    use std::mem::{transmute, transmute_copy};
+    unsafe {
+        // Safety: we only ever transmute a type to itself
+        match N {
+            0 | 1 => todo!(),
+            2 => cast_res(rec_from_pts2(transmute(pts), transmute_copy(&shift), extra_pts)),
+            3 => cast_res(rec_from_pts3(transmute(pts), transmute_copy(&shift), extra_pts)),
+            4 => cast_res(rec_from_pts4(transmute(pts), transmute_copy(&shift), extra_pts)),
+            5 => cast_res(rec_from_pts5(transmute(pts), transmute_copy(&shift), extra_pts)),
+            6 => cast_res(rec_from_pts6(transmute(pts), transmute_copy(&shift), extra_pts)),
+            7 => cast_res(rec_from_pts7(transmute(pts), transmute_copy(&shift), extra_pts)),
+            8 => cast_res(rec_from_pts8(transmute(pts), transmute_copy(&shift), extra_pts)),
+            9 => cast_res(rec_from_pts9(transmute(pts), transmute_copy(&shift), extra_pts)),
+            10 => cast_res(rec_from_pts10(transmute(pts), transmute_copy(&shift), extra_pts)),
+            11 => cast_res(rec_from_pts11(transmute(pts), transmute_copy(&shift), extra_pts)),
+            12 => cast_res(rec_from_pts12(transmute(pts), transmute_copy(&shift), extra_pts)),
+            13 => cast_res(rec_from_pts13(transmute(pts), transmute_copy(&shift), extra_pts)),
+            14 => cast_res(rec_from_pts14(transmute(pts), transmute_copy(&shift), extra_pts)),
+            15 => cast_res(rec_from_pts15(transmute(pts), transmute_copy(&shift), extra_pts)),
+            16 => cast_res(rec_from_pts16(transmute(pts), transmute_copy(&shift), extra_pts)),
+            _ => unimplemented!("Multivariate reconstruction with more than 16 variables")
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum Needed<const N: usize> {
+    Pt([u64; N]),
+    Pts(Vec<[u64; N]>),
+}
+
+impl<const N: usize> Display for Needed<N> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Needed::Pt(z) => write!(f, "{z:?}"),
+            Needed::Pts(z) => write!(f, "{z:?}"),
+        }
+    }
+}
+
+#[derive(Error, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FailedRec<const N: usize> {
+    #[error("Need points for reconstruction")]
+    Empty,
+    #[error("Need more points in characteristic {modulus}. Next points: {needed}")]
+    MorePts {
+        modulus: u64,
+        needed: Needed<N>,
+    },
+    #[error("Need points in new characteristic. Suggested next characteristic: {0}")]
+    MoreMods(u64),
+    #[error("Need points in new characteristic, but no supported characteristics are left.")]
+    NoModsLeft,
+    #[error("Unknown modulus {0}: is not in `LARGE_PRIMES`")]
+    UnknownMod(u64),
+}
+
+#[derive(Debug)]
+struct UnknownMod(u64);
+
+impl<const N: usize> From<UnknownMod> for FailedRec<N> {
+    fn from(source: UnknownMod) -> Self {
+        Self::UnknownMod(source.0)
+    }
 }
 
 #[cfg(test)]
@@ -317,7 +544,7 @@ mod tests {
                                 match rec.status().unwrap() {
                                     Status::Done => break 'rec,
                                     Status::NextMod => break,
-                                    Status::Needed(Needed::Pts(pts)) => {
+                                    Status::Needed(ModNeeded::Pts(pts)) => {
                                         let pts = Vec::from_iter(
                                             pts.into_iter()
                                                 .filter_map(
@@ -326,7 +553,7 @@ mod tests {
                                         );
                                         rec.add_pts(&pts).unwrap();
                                     },
-                                    Status::Needed(Needed::Pt(z)) => {
+                                    Status::Needed(ModNeeded::Pt(z)) => {
                                         let q_z: Z64<P> = orig.try_eval(z).unwrap();
                                         rec.add_pt(*z, q_z).unwrap();
                                     }

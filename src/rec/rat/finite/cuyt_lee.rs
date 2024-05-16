@@ -164,6 +164,9 @@ macro_rules! impl_rat_rec_mod_recursive {
                         pts: &[([Z64<P>; $n], Z64<P>)],
                     ) -> ControlFlow<(), Needed<P, $n>> {
                         use ReconstructionStatus::*;
+                        if pts.is_empty() {
+                            return ControlFlow::Continue(Needed::Pts(Vec::new()));
+                        }
                         match self.status() {
                             Rat => {
                                 let mut res = ControlFlow::Break(());
@@ -519,7 +522,7 @@ fn normalise_lowest_den_coeff_to_one<const P: u64>(
 // transform from [x0, x1, ..., t] to
 // [z0, z1, z2, ...] = [t*x0 + s0, t*x1 + s1, t*x2 + s2, ..., t + sM]
 // with a `shift` = [s0, s1, s2, ..., sM]
-fn x_to_z<const N: usize, const P: u64>(
+pub fn x_to_z<const N: usize, const P: u64>(
     mut coord: [Z64<P>; N],
     shift: &[Z64<P>; N],
 ) -> [Z64<P>; N] {
@@ -535,7 +538,7 @@ fn x_to_z<const N: usize, const P: u64>(
 
 // transform from [z0, z1, ...] to [x0, x1, ..., t]
 // with a `shift` = [s0, s1, s2, ..., sM]
-fn z_to_x<const N: usize, const P: u64>(
+pub fn z_to_x<const N: usize, const P: u64>(
     mut coord: [Z64<P>; N],
     shift: &[Z64<P>; N],
 ) -> [Z64<P>; N] {
@@ -956,5 +959,15 @@ mod tests {
             }
         }
         true
+    }
+
+    #[test]
+    fn test_x_to_z() {
+        log_init();
+
+        const P: u64 = 1152921504606846883;
+        let shift = [775169054918279961u64, 605504957251852359u64].map(Z64::<P>::from);
+        let x = [131868931179401u64, 348565720239513221u64].map(Z64::<P>::from);
+        assert_eq!(x, z_to_x(x_to_z(x, &shift), &shift));
     }
 }
