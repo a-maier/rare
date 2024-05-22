@@ -360,7 +360,7 @@ macro_rules! impl_rat_rec {
     };
 }
 
-fn find_largest_missing_mod(
+pub(crate) fn find_largest_missing_mod(
     mods: impl Iterator<Item = u64>
 ) -> Option<u64> {
     use std::collections::BTreeSet;
