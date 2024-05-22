@@ -405,7 +405,20 @@ pub fn rec_from_pts<const N: usize>(
     unsafe {
         // Safety: we only ever transmute a type to itself
         match N {
-            0 | 1 => todo!(),
+            0 => todo!(),
+            1 => {
+                use crate::rec::rat::thiele::FailedRec as RecErr;
+                match crate::rec::rat::thiele::rec_from_pts(transmute(pts), extra_pts) {
+                    Ok(res) => Ok(transmute(res)),
+                    Err(RecErr::Empty) => Err(FailedRec::<N>::Empty),
+                    Err(RecErr::NoModsLeft) => Err(FailedRec::<N>::NoModsLeft),
+                    Err(RecErr::UnknownMod(m)) => Err(FailedRec::<N>::UnknownMod(m)),
+                    Err(RecErr::MoreMods(m)) => Err(FailedRec::<N>::MoreMods(m)),
+                    Err(RecErr::MorePts(modulus)) => Err(FailedRec::<N>::MorePts {
+                        modulus, needed: Needed::Pts(Vec::new())
+                    }),
+                }
+            }
             2 => cast_res(rec_from_pts2(transmute(pts), transmute_copy(&shift), extra_pts)),
             3 => cast_res(rec_from_pts3(transmute(pts), transmute_copy(&shift), extra_pts)),
             4 => cast_res(rec_from_pts4(transmute(pts), transmute_copy(&shift), extra_pts)),
