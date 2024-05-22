@@ -317,7 +317,7 @@ macro_rules! impl_rat_rec {
                             .cmp(&(pt1.pts.len(), pt1.modulus))
                     );
                     for ModPts{modulus, pts} in pts.iter_mut() {
-                        seq!{ PP in 0..114 {{
+                        seq!{ PP in 0..30 {{
                             if *modulus == LARGE_PRIMES[PP] {
                                 const P: u64 = LARGE_PRIMES[PP];
                                 let pts = unsafe{
@@ -371,7 +371,8 @@ fn find_largest_missing_mod(
     all_mods.pop_last()
 }
 
-impl_rat_rec! {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+// impl_rat_rec! {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+impl_rat_rec! {2, 3, 4, 5, 6, 7, 8}
 
 #[derive(Copy, Clone, Debug, Error, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum RecError {
@@ -412,15 +413,7 @@ pub fn rec_from_pts<const N: usize>(
             6 => cast_res(rec_from_pts6(transmute(pts), transmute_copy(&shift), extra_pts)),
             7 => cast_res(rec_from_pts7(transmute(pts), transmute_copy(&shift), extra_pts)),
             8 => cast_res(rec_from_pts8(transmute(pts), transmute_copy(&shift), extra_pts)),
-            9 => cast_res(rec_from_pts9(transmute(pts), transmute_copy(&shift), extra_pts)),
-            10 => cast_res(rec_from_pts10(transmute(pts), transmute_copy(&shift), extra_pts)),
-            11 => cast_res(rec_from_pts11(transmute(pts), transmute_copy(&shift), extra_pts)),
-            12 => cast_res(rec_from_pts12(transmute(pts), transmute_copy(&shift), extra_pts)),
-            13 => cast_res(rec_from_pts13(transmute(pts), transmute_copy(&shift), extra_pts)),
-            14 => cast_res(rec_from_pts14(transmute(pts), transmute_copy(&shift), extra_pts)),
-            15 => cast_res(rec_from_pts15(transmute(pts), transmute_copy(&shift), extra_pts)),
-            16 => cast_res(rec_from_pts16(transmute(pts), transmute_copy(&shift), extra_pts)),
-            _ => unimplemented!("Multivariate reconstruction with more than 16 variables")
+            _ => unimplemented!("Multivariate reconstruction with more than 8 variables")
         }
     }
 }
