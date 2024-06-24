@@ -33,10 +33,10 @@ impl<const P: u64, const N: usize> From<ModNeeded<P, N>> for Status<P, N> {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-enum SampleRes {
+enum SampleStatus {
     Complete,
-    Continue,
-    Reset,
+    Success(usize),
+    Failed,
 }
 
 const P0: u64 = LARGE_PRIMES[0];
@@ -56,7 +56,7 @@ macro_rules! impl_rat_rec {
                     res: Result<Rat<FlatPoly<Integer, $n>>, NoneError>,
                     status: Status<P0, $n>,
                     modulus: u64,
-                    sample_agree: usize,
+                    sample_status: SampleStatus,
                     shift: [u64; $n],
                 }
 
@@ -78,7 +78,7 @@ macro_rules! impl_rat_rec {
                             res: Err(NoneError {}),
                             status: Default::default(),
                             modulus: Default::default(),
-                            sample_agree: 0,
+                            sample_status: SampleStatus::Failed,
                             shift,
                         }
                     }
@@ -88,18 +88,11 @@ macro_rules! impl_rat_rec {
                         z: [Z64<P>; $n],
                         q_z: Z64<P>,
                     ) -> Result<(), RecError> {
-                        if self.status == Status::Done || self.sample(z, q_z) == SampleRes::Complete {
+                        if self.status == Status::Done || self.sample(z, q_z) == SampleStatus::Complete {
                             return Ok(());
                         }
                         if self.status == Status::NextMod {
-                            debug!("New characteristic: {P}");
-                            self.modulus = P;
-                            let shift = self.shift.map(Z64::<P>::from);
-                            let rec = [<RatRecMod $n>]::<P>::with_shift(self.extra_pts(), shift);
-                            // Safety: RatRecMod<P> should have the same binary layout for all P
-                            self.rec = unsafe {
-                                std::mem::transmute(rec)
-                            };
+                            self.update_mod::<P>();
                         }
                         if P != self.modulus {
                             return Err(RecError::Mod{expected: self.modulus, found: P});
@@ -149,17 +142,17 @@ macro_rules! impl_rat_rec {
                                             let Some(next_pos) = next_pos else {
                                                 return Ok(())
                                             };
-                                            trace!("adding point at {next_pos}");
                                             let (z, q_z) = pts[next_pos];
-                                            self.add_pt(z, q_z)?;
                                             pts = &pts[(next_pos + 1)..];
+                                            trace!("adding point at {next_pos}");
+                                            self.add_pt(z, q_z)?;
                                         }
                                         ModNeeded::Pts(next_wanted) => {
                                             let sample = pts.iter()
                                                 .map(|(q, q_z)| self.sample(*q, *q_z))
-                                                .take_while(|&res| res != SampleRes::Reset)
-                                                .last();
-                                            if sample == Some(SampleRes::Complete) {
+                                                .skip_while(|&res| matches!(res, SampleStatus::Success(_)))
+                                                .next();
+                                            if sample == Some(SampleStatus::Complete) {
                                                 return Ok(());
                                             }
                                             trace!("next wanted points: {next_wanted:#?}");
@@ -210,7 +203,7 @@ macro_rules! impl_rat_rec {
                         s: ControlFlow<(), ModNeeded<P, $n>>
                     ) {
                         match s {
-                            ControlFlow::Break(()) => self.next_mod::<P>(),
+                            ControlFlow::Break(()) => self.finish_mod::<P>(),
                             ControlFlow::Continue(needed) => {
                                 let status: Status<P, $n> = needed.into();
                                 // Safety:
@@ -226,24 +219,28 @@ macro_rules! impl_rat_rec {
                         &mut self,
                         z: [Z64<P>; $n],
                         q_z: Z64<P>,
-                    ) -> SampleRes {
-                        if let Ok(res) = self.res.as_ref() {
-                            let our_q_z = res.try_eval(&z);
-                            if our_q_z == Some(q_z) {
-                                self.sample_agree += 1;
-                                if self.sample_agree >= self.extra_pts {
-                                    self.modulus = 0;
-                                    debug!("Reconstructed function: {res}");
-                                    self.status = Status::Done;
-                                    return SampleRes::Complete;
-                                } else {
-                                    return SampleRes::Continue;
-                                }
-                            } else {
-                                self.sample_agree = 0;
-                            }
+                    ) -> SampleStatus {
+                        use SampleStatus::*;
+                        if self.sample_status == Failed {
+                            return Failed;
                         }
-                        SampleRes::Reset
+                        let Ok(res) = self.res.as_ref() else {
+                            return self.sample_status
+                        };
+                        if res.try_eval(&z) != Some(q_z) {
+                            debug!("Sampling failed - wait for next mod to try again");
+                            self.sample_status = Failed;
+                        } else if let Success(n) = self.sample_status {
+                            self.sample_status = if n >= self.extra_pts {
+                                self.modulus = 0;
+                                self.status = Status::Done;
+                                debug!("Reconstructed function: {res}");
+                                Complete
+                            } else {
+                                Success(n + 1)
+                            };
+                        }
+                        self.sample_status
                     }
 
                     /// The current reconstruction status with suggestions for the next step
@@ -284,7 +281,7 @@ macro_rules! impl_rat_rec {
                         self.modulus
                     }
 
-                    fn next_mod<const P: u64>(&mut self) {
+                    fn finish_mod<const P: u64>(&mut self) {
                         let next_mod_rec = std::mem::replace(
                             &mut self.rec,
                             [<RatRecMod $n>]::new(0)
@@ -303,6 +300,20 @@ macro_rules! impl_rat_rec {
                             self.res = (&self.rat).try_into();
                         }
                         self.status = Status::NextMod;
+                    }
+
+                    fn update_mod<const P: u64>(&mut self) {
+                        debug!("New characteristic: {P}");
+                        self.modulus = P;
+                        let shift = self.shift.map(Z64::<P>::from);
+                        let rec = [<RatRecMod $n>]::<P>::with_shift(self.extra_pts(), shift);
+                        // Safety: RatRecMod<P> should have the same binary layout for all P
+                        self.rec = unsafe {
+                            std::mem::transmute(rec)
+                        };
+                        if self.sample_status == SampleStatus::Failed {
+                            self.sample_status = SampleStatus::Success(0);
+                        }
                     }
                 }
 
