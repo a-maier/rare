@@ -1,3 +1,4 @@
+#[cfg(feature = "cuyt-lee-rec")]
 /// Cuyt-Lee reconstruction over each characteristic
 pub mod cuyt_lee;
 /// Reconstruction over finite fields
@@ -8,4 +9,6 @@ pub mod thiele;
 pub mod thiele_linear;
 
 pub(crate) mod ffrat;
+#[cfg(feature = "cuyt-lee-rec")]
 mod sampler;
+mod util;

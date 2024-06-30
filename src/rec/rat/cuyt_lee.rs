@@ -12,11 +12,18 @@ use crate::{
         rat::{NoneError, Rat},
     },
     rec::{
-        primes::LARGE_PRIMES, rat::{ffrat::FFRat, finite::cuyt_lee::{Needed as ModNeeded, z_to_x}}
+        primes::LARGE_PRIMES,
+        rat::{
+            ffrat::FFRat,
+            finite::cuyt_lee::{Needed as ModNeeded, z_to_x},
+            sampler::Sampler,
+            util::{find_largest_missing_mod, ModPts, RecError}
+        }
     },
-    traits::TryEval,
     Integer,
 };
+
+use crate::rec::rat::sampler::Status as SampleStatus;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Status<const P: u64, const N: usize> {
@@ -353,31 +360,8 @@ macro_rules! impl_rat_rec {
     };
 }
 
-pub(crate) fn find_largest_missing_mod(
-    mods: impl Iterator<Item = u64>
-) -> Option<u64> {
-    use std::collections::BTreeSet;
-    let mut all_mods = BTreeSet::from_iter(LARGE_PRIMES);
-    for mmod in mods {
-        all_mods.remove(&mmod);
-    }
-    all_mods.pop_last()
-}
-
 // impl_rat_rec! {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 impl_rat_rec! {2, 3, 4, 5, 6, 7, 8}
-
-#[derive(Copy, Clone, Debug, Error, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum RecError {
-    #[error("Wrong characteristic: expected {expected}, got {found}")]
-    Mod { expected: u64, found: u64 },
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct ModPts<const N: usize> {
-    pub modulus: u64,
-    pub pts: Vec<([u64; N], u64)>,
-}
 
 pub fn rec_from_pts<const N: usize>(
     pts: &mut [ModPts<N>],

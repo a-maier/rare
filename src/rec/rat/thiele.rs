@@ -11,7 +11,7 @@ use crate::{
     rec::{
         primes::LARGE_PRIMES,
         rat::{
-            cuyt_lee::{find_largest_missing_mod, ModPts, RecError},
+            util::{find_largest_missing_mod, ModPts, RecError},
             ffrat::FFRat,
             finite::thiele::ThieleRec
         },

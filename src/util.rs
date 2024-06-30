@@ -14,6 +14,7 @@ pub(crate) const ALL_VARS: [&str; 100] = {
     vars
 };
 
+#[cfg(feature = "cuyt-lee-rec")]
 pub(crate) const ALL_VARS_Z: [&str; 100] = {
     let mut vars = [""; 100];
     seq!( N in 0..100 {
