@@ -8,3 +8,4 @@ pub mod thiele;
 pub mod thiele_linear;
 
 pub(crate) mod ffrat;
+mod sampler;

@@ -32,13 +32,6 @@ impl<const P: u64, const N: usize> From<ModNeeded<P, N>> for Status<P, N> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-enum SampleStatus {
-    Complete,
-    Success(usize),
-    Failed,
-}
-
 const P0: u64 = LARGE_PRIMES[0];
 
 macro_rules! impl_rat_rec {
@@ -56,7 +49,7 @@ macro_rules! impl_rat_rec {
                     res: Result<Rat<FlatPoly<Integer, $n>>, NoneError>,
                     status: Status<P0, $n>,
                     modulus: u64,
-                    sample_status: SampleStatus,
+                    sampler: Sampler,
                     shift: [u64; $n],
                 }
 
@@ -78,7 +71,7 @@ macro_rules! impl_rat_rec {
                             res: Err(NoneError {}),
                             status: Default::default(),
                             modulus: Default::default(),
-                            sample_status: SampleStatus::Failed,
+                            sampler: Sampler::new(extra_pts),
                             shift,
                         }
                     }
@@ -220,27 +213,16 @@ macro_rules! impl_rat_rec {
                         z: [Z64<P>; $n],
                         q_z: Z64<P>,
                     ) -> SampleStatus {
-                        use SampleStatus::*;
-                        if self.sample_status == Failed {
-                            return Failed;
-                        }
                         let Ok(res) = self.res.as_ref() else {
-                            return self.sample_status
+                            return SampleStatus::Failed;
                         };
-                        if res.try_eval(&z) != Some(q_z) {
-                            debug!("Sampling failed - wait for next mod to try again");
-                            self.sample_status = Failed;
-                        } else if let Success(n) = self.sample_status {
-                            self.sample_status = if n >= self.extra_pts {
-                                self.modulus = 0;
-                                self.status = Status::Done;
-                                debug!("Reconstructed function: {res}");
-                                Complete
-                            } else {
-                                Success(n + 1)
-                            };
+                        let status = self.sampler.add_pt(&z, q_z, res);
+                        if status == SampleStatus::Complete {
+                            self.modulus = 0;
+                            self.status = Status::Done;
+                            debug!("Reconstructed function: {res}");
                         }
-                        self.sample_status
+                        status
                     }
 
                     /// The current reconstruction status with suggestions for the next step
@@ -311,8 +293,8 @@ macro_rules! impl_rat_rec {
                         self.rec = unsafe {
                             std::mem::transmute(rec)
                         };
-                        if self.sample_status == SampleStatus::Failed {
-                            self.sample_status = SampleStatus::Success(0);
+                        if self.sampler.status() == SampleStatus::Failed {
+                            self.sampler.reset()
                         }
                     }
                 }
@@ -491,7 +473,7 @@ mod tests {
 
     use crate::algebra::poly::flat::FlatMono;
     use crate::rec::primes::LARGE_PRIMES;
-    use crate::traits::Zero;
+    use crate::traits::{TryEval, Zero};
     use paste::paste;
     use rug::integer::Order;
     use seq_macro::seq;
