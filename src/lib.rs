@@ -2,8 +2,10 @@
 #[doc(hidden)]
 pub mod _test_util;
 mod arr;
+#[cfg(feature = "linear")]
 mod matrix;
 pub mod rand;
+#[cfg(feature = "thiele-linear-rec")]
 pub mod rec_rat_linear;
 pub mod traits;
 mod util;

@@ -5,6 +5,7 @@ pub mod cuyt_lee;
 pub mod finite;
 /// Thiele (univariate) reconstruction
 pub mod thiele;
+#[cfg(feature = "thiele-linear-rec")]
 /// Combination of Thiele reconstruction and solving linear systems of equations
 pub mod thiele_linear;
 
