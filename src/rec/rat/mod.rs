@@ -10,6 +10,6 @@ pub mod thiele;
 pub mod thiele_linear;
 
 pub(crate) mod ffrat;
-#[cfg(feature = "cuyt-lee-rec")]
+#[cfg(feature = "sample")]
 mod sampler;
 mod util;

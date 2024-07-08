@@ -38,6 +38,7 @@ harness = false
 [features]
 default = []
 recfn = []
-cuyt-lee-rec = ["linear"]
+cuyt-lee-rec = ["linear", "sample"]
 thiele-linear-rec = ["linear"]
 linear = []
+sample = []
