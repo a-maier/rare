@@ -4,22 +4,18 @@ use rug::Integer;
 
 use crate::{
     algebra::{
-        poly::{
-            dense::DensePoly,
-            flat::{FlatMono, FlatPoly},
-        },
+        poly::flat::{FlatMono, FlatPoly},
         rat::{NoneError, Rat},
     },
     rec::rat::ffrat::FFRat,
     rec::{
         probe::Probe,
-        rat::finite::{
-            linear::{RecLinear, Unit, UNIT},
-            thiele::ThieleRec,
-        },
+        rat::finite::linear::{RecLinear, Unit, UNIT},
     },
-    traits::{One, TryEval, Zero},
+    traits::{TryEval, Zero},
 };
+
+use super::finite::degree_rec::DegreeRec;
 
 /// Reconstruction status
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -27,14 +23,9 @@ pub enum Status<const P: u64, const N: usize> {
     /// Reconstructing numerator and denominator degrees
     ///
     /// We are currently reconstructing the highest powers in the
-    /// variable number `n` and need the value of the function at
-    /// `next_arg`. Other arguments are also acceptable, as long as
-    /// they only differ in the nth coordinate. If `next_arg` is
-    /// `None`, any argument will do.
-    Degrees {
-        n: usize,
-        next_arg: Option<[Z64<P>; N]>,
-    },
+    /// variable with the given number. The next point should
+    /// only differ in this variable from the previous one.
+    Degree(usize),
     /// Reconstructing the rational function.
     ///
     /// The argument is the estimated number of probes that will be needed
@@ -52,7 +43,7 @@ pub enum Status<const P: u64, const N: usize> {
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Rec<const P: u64, const N: usize> {
     extra_pts: usize,
-    degree_rec: ThieleRec<P>,
+    degree_rec: DegreeRec<P, N>,
     powers: [[u32; 2]; N],
     rat: FFRat<N>,
     res: Result<Rat<FlatPoly<Integer, N>>, NoneError>,
@@ -64,84 +55,40 @@ impl<const P: u64, const N: usize> Rec<P, N> {
         Self {
             extra_pts,
             powers: [[0; 2]; N],
-            degree_rec: ThieleRec::new(extra_pts),
+            degree_rec: DegreeRec::new(extra_pts),
             rat: Default::default(),
             res: Err(NoneError {}),
-            status: Status::Degrees {
-                n: 0,
-                next_arg: None,
-            },
+            status: Status::Degree(0),
         }
     }
 
     pub fn add_pt(&mut self, z: [Z64<P>; N], q_z: Z64<P>) -> Status<P, N> {
         use std::ops::ControlFlow::{Break, Continue};
-        use Status::Degrees;
-        let Degrees { n, next_arg } = self.status() else {
+        use Status::Degree;
+        if !matches!(self.status, Degree(_)) {
             warn!("Not reconstructing degrees, ignoring single point");
             return self.status();
-        };
-        if let Some(next_arg) = next_arg {
-            let shift_ok = z
-                .iter()
-                .copied()
-                .zip(next_arg)
-                .enumerate()
-                .all(|(m, (z, zp))| n == m || z == zp);
-            if !shift_ok {
-                warn!("Ignoring point {z:?}: should differ from {next_arg:?} only in coordinate {n}");
-                return self.status();
-            }
         }
-        match self.degree_rec.add_pt(z[n], q_z) {
-            Continue(()) => {
-                let mut next_arg = z;
-                next_arg[n] += Z64::one();
-                self.status = Degrees {
-                    n,
-                    next_arg: Some(next_arg),
-                };
-            }
-            Break(()) => {
-                let rat = std::mem::replace(
-                    &mut self.degree_rec,
-                    ThieleRec::new(self.extra_pts),
-                )
-                .into_rat();
-                let rat: Rat<DensePoly<_>> = rat.into();
-                let num_pow = rat.num().len().try_into().unwrap();
-                let den_pow = rat.den().len().try_into().unwrap();
-                self.powers[n] = [num_pow, den_pow];
-                debug!("Powers in variable {n}: {:?}", self.powers[n]);
-                if num_pow == 0 {
+        match self.degree_rec.add_pt(z, q_z) {
+            Ok(Break(res)) => {
+                debug!("Finished reconstructing variable powers: {res:?}");
+                self.powers = res;
+                if self.powers.is_zero() {
                     self.res = Ok(Zero::zero());
                     self.status = Status::Done;
-                } else if n + 1 < self.powers.len() {
-                    self.status = Degrees {
-                        n: n + 1,
-                        next_arg: None,
-                    }
                 } else {
                     let nnum = nterms_with_max_pows(self.num_pows());
                     let nden = nterms_with_max_pows(self.den_pows());
-                    if N == 1 {
-                        // for univariate rational functions we have already completed
-                        // reconstruction over the first finite field
-                        let ncoeff = rat.num().len() + rat.den().len() - 1;
-                        let (num, den) = rat.into_num_den();
-                        let rat: Rat<FlatPoly<Z64<P>, 1>> =
-                            Rat::from_num_den_unchecked(num.into(), den.into());
-                        assert_eq!(N, 1);
-                        // SAFETY: the above assert
-                        let rat: Rat<FlatPoly<Z64<P>, N>> =
-                            unsafe { std::mem::transmute(rat) };
-                        self.rat = FFRat::from(rat);
-                        self.status = Status::Rat(ncoeff);
-                    } else {
-                        self.status =
-                            Status::Rat(nnum + nden + self.extra_pts - 1);
-                    }
+                    self.status =
+                        Status::Rat(nnum + nden + self.extra_pts - 1);
                 }
+            }
+            Ok(Continue(n)) => {
+                self.status = Degree(n);
+            }
+            Err(err) => {
+                // TODO: return error
+                warn!("{err}");
             }
         }
         self.status()
@@ -152,7 +99,7 @@ impl<const P: u64, const N: usize> Rec<P, N> {
         pts: &'a [Probe<Q, N>],
     ) -> Status<P, N> {
         match self.status() {
-            Status::Degrees { .. } => {
+            Status::Degree { .. } => {
                 if Q == P {
                     // cast to the correct type
                     // SAFETY: we just checked that the type is actually &'a [Probe<P, N>]
@@ -162,7 +109,7 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                     };
                     for Probe { arg, val } in pts.iter().copied() {
                         let status = self.add_pt(arg, val);
-                        if !matches!(status, Status::Degrees { .. }) {
+                        if !matches!(status, Status::Degree { .. }) {
                             break;
                         }
                     }
@@ -284,7 +231,7 @@ mod tests {
 
     use crate::rec::primes::LARGE_PRIMES;
     use crate::algebra::poly::flat::FlatMono;
-    use crate::traits::Zero;
+    use crate::traits::{One, Zero};
     use paste::paste;
     use rug::integer::Order;
     use seq_macro::seq;
@@ -351,8 +298,8 @@ mod tests {
                         .flatten()
                         .next()
                         .unwrap();
-                    while let Status::Degrees{n, next_arg} = rec.add_pt(z, q_z) {
-                        z = next_arg.unwrap_or_else(|| rng.gen());
+                    while let Status::Degree(n) = rec.add_pt(z, q_z) {
+                        z[n] += Z64::one();
                         q_z = loop {
                             if let Some(val) = orig.try_eval(&z) {
                                 break val;
