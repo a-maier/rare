@@ -15,7 +15,7 @@ pub type IntRat<const N: usize> = Rat<FlatPoly<Integer, N>>;
 pub struct Rec<const P: u64, const N: usize> {
     extra_pts: usize,
     rec: DegreeOrScaledRec<P, N>,
-    scalings: [u32; N],
+    scalings: Scalings<N>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -34,7 +34,7 @@ impl<const P: u64, const N: usize> Rec<P, N> {
         Self {
             extra_pts,
             rec,
-            scalings: [0; N],
+            scalings: Scalings::default(),
         }
     }
 
@@ -63,28 +63,24 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                 match rec.add_pt(z, q_z)? {
                     Continue(n) => Ok(Continue(Varying(n))),
                     Break(powers) => {
-                        self.scalings = powers.map(|p| p.into_iter().max().unwrap());
-                        debug!("Found scalings: {:?}", self.scalings);
-                        self.rec = DegreeOrScaledRec::ScaledRec(
-                            thiele_univar::Rec::new(self.extra_pts)
-                        );
-                        Ok(Continue(Scaling(self.scalings)))
+                        self.set_scalings(powers.map(|p| p.into_iter().max().unwrap()));
+                        Ok(Continue(Scaling))
                     },
                 }
             },
             ScaledRec(ref mut rec) => {
-                check_pt_scaling(z, self.scalings)?;
+                self.scalings.check_pt(z)?;
                 rec.add_pt([z[0]], q_z)?;
                 let res = match rec.status() {
-                    thiele_univar::Status::NeedNextPt => Continue(Scaling(self.scalings)),
-                    thiele_univar::Status::NeedNextMod => Continue(NextMod(self.scalings)),
+                    thiele_univar::Status::NeedNextPt => Continue(Scaling),
+                    thiele_univar::Status::NeedNextMod => Continue(NextMod),
                     thiele_univar::Status::Done => {
                         let rat = std::mem::replace(
                             rec,
                             thiele_univar::Rec::new(self.extra_pts)
                         ).into_rat().unwrap();
                         debug!("Finished reconstruction: {rat}");
-                        Break(undo_scalings(rat, self.scalings))
+                        Break(self.scalings.undo(rat))
                     },
                 };
                 Ok(res)
@@ -92,34 +88,80 @@ impl<const P: u64, const N: usize> Rec<P, N> {
         }
     }
 
+    pub fn set_scalings(&mut self, scalings: [u32; N]) {
+        self.scalings = Scalings(scalings);
+        debug!("Set scalings: {:?}", self.scalings);
+        self.rec = DegreeOrScaledRec::ScaledRec(
+            thiele_univar::Rec::new(self.extra_pts)
+        );
+    }
+
+    pub fn scale<const Q: u64>(&self, z0: Z64<Q>) -> [Z64<Q>; N] {
+        self.scalings.scale(z0)
+    }
+
 }
 
-fn undo_scalings<const N: usize>(
-    rat: Rat<FlatPoly<Integer, 1>>,
-    scalings: [u32; N]
-) -> Rat<FlatPoly<Integer, N>> {
-    if rat.is_zero() {
-        return Rat::zero();
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+struct Scalings<const N: usize>([u32; N]);
+
+impl<const N: usize> Scalings<N> {
+    fn scale<const P: u64>(&self, z0: Z64<P>) -> [Z64<P>; N] {
+        let mut res = [z0; N];
+        for n in 1..N {
+            res[n] = res[n - 1].powu(self.0[n - 1] as u64)
+        }
+        res
     }
-    let (num, den) = rat.into_num_den();
-    let num = FlatPoly::from_terms(
-        num.into_terms()
-            .into_iter()
-            .map(|t| term_from_scalings(t, scalings))
-            .collect()
-    );
-    let den = FlatPoly::from_terms(
-        den.into_terms()
-            .into_iter()
-            .map(|t| term_from_scalings(t, scalings))
-            .collect()
-    );
-    Rat::from_num_den_unchecked(num, den)
+
+    fn check_pt<const P: u64, const Q: u64>(
+        &self,
+        z: [Z64<P>; N],
+    ) -> Result<(), Error<Q, N>> {
+        let expected = self.scale(z[0]);
+        if z != expected {
+            Err(Error::Scaling {
+                expected: expected.map(|z| u64::from(z)),
+                got: z.map(|z| u64::from(z))
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    fn undo(
+        &self,
+        rat: Rat<FlatPoly<Integer, 1>>
+    ) -> Rat<FlatPoly<Integer, N>> {
+        if rat.is_zero() {
+            return Rat::zero();
+        }
+        let (num, den) = rat.into_num_den();
+        let num = FlatPoly::from_terms(
+            num.into_terms()
+                .into_iter()
+                .map(|t| term_from_scalings(t, &self.0))
+                .collect()
+        );
+        let den = FlatPoly::from_terms(
+            den.into_terms()
+                .into_iter()
+                .map(|t| term_from_scalings(t, &self.0))
+                .collect()
+        );
+        Rat::from_num_den_unchecked(num, den)
+    }
+}
+
+impl<const N: usize> Default for Scalings<N> {
+    fn default() -> Self {
+        Self([0; N])
+    }
 }
 
 fn term_from_scalings<const N: usize>(
     t: FlatMono<Integer, 1>,
-    scalings: [u32; N]
+    scalings: &[u32; N]
 ) -> FlatMono<Integer, N> {
     let FlatMono{
         coeff,
@@ -137,47 +179,10 @@ fn term_from_scalings<const N: usize>(
     FlatMono { powers: res_powers, coeff }
 }
 
-fn check_pt_scaling<const N: usize, const P: u64, const Q: u64>(
-    z: [Z64<Q>; N],
-    scalings: [u32; N],
-) -> Result<(), Error<P, N>> {
-    if N == 1 {
-        return Ok(());
-    }
-    let mut expected = [z[0]; N];
-    let scaled = scalings[..(N - 1)].iter()
-        .scan(z[0], |z, s| {
-            *z = z.powu(*s as _);
-            Some(*z)
-        });
-    for (lhs, rhs) in expected[1..].iter_mut().zip(scaled) {
-        *lhs = rhs;
-    }
-    if z != expected {
-        Err(Error::Scaling {
-            expected: expected.map(|z| u64::from(z)),
-            got: z.map(|z| u64::from(z))
-        })
-    } else {
-        Ok(())
-    }
-}
-
-pub fn scale<const N: usize, const P: u64>(
-    z0: Z64<P>,
-    scalings: [u32; N],
-) -> [Z64<P>; N] {
-    let mut res = [z0; N];
-    for n in 1..N {
-        res[n] = res[n - 1].powu(scalings[n - 1] as u64)
-    }
-    res
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Status<const N: usize> {
-    NextMod([u32; N]),
-    Scaling([u32; N]),
+    NextMod,
+    Scaling,
     Varying(usize),
 }
 
@@ -288,29 +293,26 @@ mod tests {
                     }
                     let rec = match status {
                         Break(rec) => rec,
-                        Continue(Scaling(scaling)) => 'rec: {
+                        Continue(Scaling) => 'rec: {
                             seq!{ N in 0..20 {{
                                 const P: u64 = LARGE_PRIMES[N];
                                 let mut z0: Z64<P> = rng.gen();
 
                                 loop {
                                     z0 += Z64::one();
-                                    let mut z = scale(z0, scaling);
+                                    let mut z = rec.scale(z0);
                                     let q_z = loop {
                                         if let Some(val) = orig.try_eval(&z) {
                                             break val;
                                         }
                                         z0 += Z64::one();
-                                        z = scale(z0, scaling);
+                                        z = rec.scale(z0);
                                     };
                                     let status = rec.add_pt(z, q_z).unwrap();
                                     match status {
                                         Break(rec) => break 'rec rec,
-                                        Continue(NextMod(sc)) => {
-                                            assert_eq!(sc, scaling);
-                                            break
-                                        },
-                                        Continue(Scaling(sc)) => assert_eq!(sc, scaling),
+                                        Continue(NextMod) => break,
+                                        Continue(Scaling) => {},
                                         _ => unreachable!("Unexpected reconstruction return value")
                                     }
                                 }
