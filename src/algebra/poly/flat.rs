@@ -127,7 +127,9 @@ where
                         let mut lhs = lhs_terms.next().unwrap();
                         let rhs = rhs_terms.next().unwrap();
                         lhs.coeff += rhs.coeff;
-                        res.push(lhs)
+                        if !lhs.coeff.is_zero() {
+                            res.push(lhs)
+                        }
                     }
                 },
             }
