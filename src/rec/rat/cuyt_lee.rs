@@ -305,7 +305,7 @@ macro_rules! impl_rat_rec {
                             std::mem::transmute(rec)
                         };
                         if self.sampler.status() == SampleStatus::Failed {
-                            self.sampler == Sampler::new(self.extra_pts())
+                            self.sampler = Sampler::new(self.extra_pts())
                         }
                     }
                 }
@@ -386,8 +386,8 @@ pub fn rec_from_pts<const N: usize>(
         match N {
             0 => todo!(),
             1 => {
-                use crate::rec::rat::thiele::FailedRec as RecErr;
-                match crate::rec::rat::thiele::rec_from_pts(
+                use crate::rec::rat::thiele_univar::FailedRec as RecErr;
+                match crate::rec::rat::thiele_univar::rec_from_pts(
                     transmute(pts),
                     extra_pts,
                 ) {
