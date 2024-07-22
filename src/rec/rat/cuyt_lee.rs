@@ -110,7 +110,7 @@ macro_rules! impl_rat_rec {
                     }
 
                     pub fn add_pts<'a, const P: u64>(
-                        &mut self,
+                        &'a mut self,
                         mut pts: &[([Z64<P>; $n], Z64<P>)],
                     ) -> Result<(), RecError> {
                         loop {

@@ -1,3 +1,5 @@
+#![allow(clippy::missing_transmute_annotations)]
+
 #[cfg(feature = "cuyt-lee-rec")]
 /// Cuyt-Lee reconstruction over each characteristic
 pub mod cuyt_lee;

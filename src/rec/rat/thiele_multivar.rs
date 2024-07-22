@@ -119,10 +119,13 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                     _ => {
                         let mut powers = rec.rec.cur_powers();
                         powers[N - 1] = [u32::MAX; 2];
-                        let mut scaled_rec = ScaledRec::default();
-                        scaled_rec.transform = Transform {
+                        let transform = Transform {
                             scale: powers.map(|p| p.into_iter().max().unwrap()),
                             shift: rec.shift,
+                        };
+                        let scaled_rec = ScaledRec{
+                            transform,
+                            ..Default::default()
                         };
                         self.rec = DegreeOrScaledRec::ScaledRec(scaled_rec);
                         Scaling
@@ -210,8 +213,8 @@ impl<const N: usize> Transform<N> {
         let expected = self.transform(z[0]);
         if z != expected {
             Err(Error::Scaling {
-                expected: expected.map(|z| u64::from(z)),
-                got: z.map(|z| u64::from(z)),
+                expected: expected.map(u64::from),
+                got: z.map(u64::from),
             })
         } else {
             Ok(())
@@ -289,8 +292,7 @@ impl<const N: usize> Transform<N> {
                     expanded = tmp;
                 }
             }
-            let expanded: FlatPoly<_, N> = expanded.into();
-            res += expanded * &coeff;
+            res += expanded * coeff;
         }
         res
     }
