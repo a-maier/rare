@@ -1,41 +1,77 @@
-use std::ops::ControlFlow::{self, *};
+use std::{any::Any, ops::ControlFlow::{self, *}};
 
 use log::{debug, trace};
+use rand::Rng;
 use thiserror::Error;
 
 use crate::{
-    algebra::{poly::flat::{FlatMono, FlatPoly}, rat::Rat}, rec::rat::{
-        finite::degree_rec::{self, DegreeRec}, thiele_univar, util,
-    }, traits::Zero, Integer, Z64
+    algebra::{poly::{dense::DensePoly, flat::{FlatMono, FlatPoly}}, rat::{NoneError, Rat}},
+    rec::rat::{
+        ffrat::FFRat, finite::{degree_rec, thiele::{ThieleRat, ThieleRec}}, sampler::{self, Sampler}, util
+    }, traits::{One, Zero}, Integer, Z64
 };
 
 pub type IntRat<const N: usize> = Rat<FlatPoly<Integer, N>>;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Debug)]
 pub struct Rec<const P: u64, const N: usize> {
     extra_pts: usize,
     rec: DegreeOrScaledRec<P, N>,
-    scalings: Scalings<N>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+struct DegreeRec<const P: u64, const N: usize> {
+    rec: degree_rec::DegreeRec<P, N>,
+    shift: [u64; N],
+}
+
+#[derive(Debug)]
+struct ScaledRec<const N: usize> {
+    rec: Box<dyn Any>,
+    modulus: u64,
+    rat: FFRat<N>,
+    res: Result<Rat<FlatPoly<Integer, N>>, NoneError>,
+    transform: Transform<N>,
+    sampler: Sampler,
+}
+
+impl<const N: usize> Default for ScaledRec<N> {
+    fn default() -> Self {
+        Self {
+            rec: Box::new(()),
+            modulus: 0,
+            rat: Default::default(),
+            res: Err(NoneError {}),
+            transform: Default::default(),
+            sampler: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum DegreeOrScaledRec<const P: u64, const N: usize> {
     DegreeRec(DegreeRec<P, N>),
-    ScaledRec(thiele_univar::Rec),
+    ScaledRec(ScaledRec<N>),
 }
 
 impl<const P: u64, const N: usize> Rec<P, N> {
-    pub fn new(extra_pts: usize) -> Self {
+    pub fn with_shift(extra_pts: usize, shift: [u64; N]) -> Self {
         let rec = if N == 1 {
-            DegreeOrScaledRec::ScaledRec(thiele_univar::Rec::new(extra_pts))
+            DegreeOrScaledRec::ScaledRec(ScaledRec::default())
         } else {
-            DegreeOrScaledRec::DegreeRec(DegreeRec::new(extra_pts))
+            DegreeOrScaledRec::DegreeRec(DegreeRec{
+                rec: degree_rec::DegreeRec::new(extra_pts),
+                shift,
+            })
         };
         Self {
             extra_pts,
             rec,
-            scalings: Scalings::default(),
         }
+    }
+
+    pub fn with_random_shift(extra_pts: usize, mut rng: impl Rng) -> Self {
+        Self::with_shift(extra_pts, [(); N].map(|_| rng.gen()))
     }
 
     pub fn add_pt<const Q: u64>(
@@ -43,11 +79,10 @@ impl<const P: u64, const N: usize> Rec<P, N> {
         z: [Z64<Q>; N],
         q_z: Z64<Q>
     ) -> Result<ControlFlow<IntRat<N>, Status<N>>, Error<P, N>> {
-        use DegreeOrScaledRec::*;
         use Status::*;
         trace!("Adding: f({z:?}) = {q_z}");
         match self.rec {
-            DegreeRec(ref mut rec) => {
+            DegreeOrScaledRec::DegreeRec(ref mut rec) => {
                 if P != Q {
                     return Err(util::RecError::Mod{
                         expected: P,
@@ -60,56 +95,85 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                     let z = z.map(|z| Z64::new_unchecked(u64::from(z)));
                     (z, std::mem::transmute(q_z))
                 };
-                match rec.add_pt(z, q_z)? {
-                    Continue(n) => Ok(Continue(Varying(n))),
+                let res = match rec.rec.add_pt(z, q_z)? {
+                    Continue(n) => Varying(n),
                     Break(powers) => {
-                        self.set_scalings(powers.map(|p| p.into_iter().max().unwrap()));
-                        Ok(Continue(Scaling))
-                    },
-                }
-            },
-            ScaledRec(ref mut rec) => {
-                self.scalings.check_pt(z)?;
-                rec.add_pt([z[0]], q_z)?;
-                let res = match rec.status() {
-                    thiele_univar::Status::NeedNextPt => Continue(Scaling),
-                    thiele_univar::Status::NeedNextMod => Continue(NextMod),
-                    thiele_univar::Status::Done => {
-                        let rat = std::mem::replace(
-                            rec,
-                            thiele_univar::Rec::new(self.extra_pts)
-                        ).into_rat().unwrap();
-                        debug!("Finished reconstruction: {rat}");
-                        Break(self.scalings.undo(rat))
+                        let mut scaled_rec = ScaledRec::default();
+                        scaled_rec.transform = Transform {
+                            scale: powers.map(|p| p.into_iter().max().unwrap()),
+                            shift: rec.shift,
+                        };
+                        self.rec = DegreeOrScaledRec::ScaledRec(scaled_rec);
+                        Scaling
                     },
                 };
-                Ok(res)
+                Ok(Continue(res))
+            },
+            DegreeOrScaledRec::ScaledRec(ref mut rec) => {
+                if rec.modulus == 0 {
+                    debug!("New modulus: {Q}");
+                    rec.rec = Box::new(ThieleRec::<Q>::new(self.extra_pts));
+                    if rec.sampler.status() == sampler::Status::Failed {
+                        rec.sampler = Sampler::new(self.extra_pts);
+                    }
+                    rec.modulus = Q;
+                } else if rec.modulus != Q {
+                    return Err(util::RecError::Mod{
+                        expected: rec.modulus,
+                        found: Q,
+                    }.into());
+                }
+                rec.transform.check_pt(z)?;
+                if let Ok(res) = rec.res.as_mut() {
+                    if rec.sampler.add_pt(&z, q_z, res) == sampler::Status::Complete {
+                        return Ok(Break(std::mem::take(res)));
+                    }
+                }
+                let scaled_rec = rec.rec.downcast_mut::<ThieleRec<Q>>().unwrap();
+                let res = match scaled_rec.add_pt(z[0], q_z) {
+                    Continue(()) => Scaling,
+                    Break(()) => {
+                        let rat = std::mem::take(scaled_rec).into_rat();
+                        rec.modulus = 0;
+                        let rat = rec.transform.undo(rat);
+                        debug!("Multivariate reconstruction result: {rat}");
+                        if rec.rat.modulus == 0 {
+                            rec.rat = rat.into();
+                        } else {
+                            rec.rat.merge_crt(rat);
+                        }
+                        rec.res = (&rec.rat).try_into();
+                        NextMod
+                    },
+                };
+                Ok(Continue(res))
             }
         }
     }
 
-    pub fn set_scalings(&mut self, scalings: [u32; N]) {
-        self.scalings = Scalings(scalings);
-        debug!("Set scalings: {:?}", self.scalings);
-        self.rec = DegreeOrScaledRec::ScaledRec(
-            thiele_univar::Rec::new(self.extra_pts)
-        );
+    pub fn to_args<const Q: u64>(&self, z: Z64<Q>) -> Option<[Z64<Q>; N]> {
+        if let DegreeOrScaledRec::ScaledRec(ref rec) = self.rec {
+            Some(rec.transform.transform(z))
+        } else {
+            None
+        }
     }
-
-    pub fn scale<const Q: u64>(&self, z0: Z64<Q>) -> [Z64<Q>; N] {
-        self.scalings.scale(z0)
-    }
-
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct Scalings<const N: usize>([u32; N]);
+struct Transform<const N: usize> {
+    scale: [u32; N],
+    shift: [u64; N],
+}
 
-impl<const N: usize> Scalings<N> {
-    fn scale<const P: u64>(&self, z0: Z64<P>) -> [Z64<P>; N] {
-        let mut res = [z0; N];
+impl<const N: usize> Transform<N> {
+    fn transform<const P: u64>(&self, z: Z64<P>) -> [Z64<P>; N] {
+        let mut res = [z; N];
         for n in 1..N {
-            res[n] = res[n - 1].powu(self.0[n - 1] as u64)
+            res[n] = res[n - 1].powu(self.scale[n - 1] as u64);
+        }
+        for (lhs, shift) in res.iter_mut().skip(1).zip(self.shift) {
+            *lhs += Z64::from(shift);
         }
         res
     }
@@ -118,7 +182,7 @@ impl<const N: usize> Scalings<N> {
         &self,
         z: [Z64<P>; N],
     ) -> Result<(), Error<Q, N>> {
-        let expected = self.scale(z[0]);
+        let expected = self.transform(z[0]);
         if z != expected {
             Err(Error::Scaling {
                 expected: expected.map(|z| u64::from(z)),
@@ -129,54 +193,84 @@ impl<const N: usize> Scalings<N> {
         }
     }
 
-    fn undo(
+    fn undo<const P: u64>(
         &self,
-        rat: Rat<FlatPoly<Integer, 1>>
-    ) -> Rat<FlatPoly<Integer, N>> {
+        rat: ThieleRat<Z64<P>>
+    ) -> Rat<FlatPoly<Z64<P>, N>> {
+        debug!("Undo scaling");
+        let rat: Rat<DensePoly<_>> = rat.into();
+        debug!("Expanded: {rat}");
         if rat.is_zero() {
             return Rat::zero();
         }
         let (num, den) = rat.into_num_den();
-        let num = FlatPoly::from_terms(
-            num.into_terms()
-                .into_iter()
-                .map(|t| term_from_scalings(t, &self.0))
-                .collect()
-        );
-        let den = FlatPoly::from_terms(
-            den.into_terms()
-                .into_iter()
-                .map(|t| term_from_scalings(t, &self.0))
-                .collect()
-        );
+        let mut num = self.undo_poly(num);
+        let mut den = self.undo_poly(den);
+        let norm = num.terms().last().unwrap().coeff.inv();
+        num *= norm;
+        den *= norm;
         Rat::from_num_den_unchecked(num, den)
     }
+
+    fn undo_poly<const P: u64>(
+        &self,
+        poly: DensePoly<Z64<P>>
+    ) -> FlatPoly<Z64<P>, N> {
+        if N == 1 {
+            return FlatPoly::from_raw_terms(
+                poly.into_coeff()
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(pow, coeff)| if coeff.is_zero() {
+                        None
+                    } else {
+                        Some(FlatMono{coeff, powers: [pow as u32; N]})
+                    })
+                    .collect()
+            );
+        }
+        let shift = self.shift.map(|s| s.into());
+        let mut res = FlatPoly::new();
+        for (pow, coeff) in poly.into_coeff().into_iter().enumerate() {
+            let mut pow = pow as u32;
+            let mut expanded = FlatPoly::new();
+            for (n, s) in self.scale.iter().enumerate() {
+                let mut res_powers = [0; N];
+                let zn_pow = pow % s;
+                pow /= s;
+                if n == 0 {
+                    res_powers[n] = zn_pow;
+                    expanded = FlatMono {
+                        coeff: Z64::one(),
+                        powers: res_powers,
+                    }.into();
+                } else {
+                    res_powers[n] = 1;
+                    let base = FlatMono {
+                        coeff: Z64::one(),
+                        powers: res_powers,
+                    } - FlatMono {
+                        coeff: shift[n - 1],
+                        powers: [0; N],
+                    };
+                    let tmp = &expanded * &base.powu(zn_pow);
+                    expanded = tmp;
+                }
+            }
+            let expanded: FlatPoly<_, N> = expanded.into();
+            res += expanded * &coeff;
+        }
+        res
+    }
 }
 
-impl<const N: usize> Default for Scalings<N> {
+impl<const N: usize> Default for Transform<N> {
     fn default() -> Self {
-        Self([0; N])
+        Self{
+            scale: [0; N],
+            shift: [0; N],
+        }
     }
-}
-
-fn term_from_scalings<const N: usize>(
-    t: FlatMono<Integer, 1>,
-    scalings: &[u32; N]
-) -> FlatMono<Integer, N> {
-    let FlatMono{
-        coeff,
-        powers,
-    } = t;
-    let [mut pow] = powers;
-    if N == 1 {
-        return FlatMono { powers: [pow; N], coeff }
-    }
-    let mut res_powers = [0; N];
-    for (n, s) in scalings.iter().enumerate() {
-        res_powers[n] = pow % s;
-        pow /= s;
-    }
-    FlatMono { powers: res_powers, coeff }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -202,6 +296,7 @@ pub enum Error<const P: u64, const N: usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use log::debug;
     use ::rand::{Rng, SeedableRng};
 
     use crate::rec::primes::LARGE_PRIMES;
@@ -246,8 +341,7 @@ mod tests {
         mut rng: impl Rng,
     ) -> Rat<FlatPoly<Integer, N>> {
         let mut den = FlatPoly::zero();
-        // TODO: implement shift so that everything works with non-vanishing starting power
-        while den.is_zero() || !den.term(0).powers.is_zero() {
+        while den.is_zero() {
             den = rand_poly(&mut rng);
         }
         let num = rand_poly(rng);
@@ -268,7 +362,7 @@ mod tests {
 
                     let orig = rand_rat::<NVARS>(&mut rng);
                     eprintln!("trying to reconstruct {orig}");
-                    let mut rec: Rec<P, NVARS> = Rec::new(1);
+                    let mut rec: Rec<P, NVARS> = Rec::with_random_shift(1, &mut rng);
                     let (mut z, mut q_z) = std::iter::repeat_with(|| {
                         let z: [Z64<P>; NVARS] = [(); NVARS].map(|_| rng.gen());
                         orig.try_eval(&z).map(|q_z| (z, q_z))
@@ -300,13 +394,13 @@ mod tests {
 
                                 loop {
                                     z0 += Z64::one();
-                                    let mut z = rec.scale(z0);
+                                    let mut z = rec.to_args(z0).unwrap();
                                     let q_z = loop {
                                         if let Some(val) = orig.try_eval(&z) {
                                             break val;
                                         }
                                         z0 += Z64::one();
-                                        z = rec.scale(z0);
+                                        z = rec.to_args(z0).unwrap();
                                     };
                                     let status = rec.add_pt(z, q_z).unwrap();
                                     match status {
@@ -321,9 +415,7 @@ mod tests {
                         }
                         _ => unreachable!("Unexpected reconstruction return value")
                     };
-                    // assert_eq!(rec.status, Status::Done);
-                    // let rec = rec.into_rat().unwrap();
-                    // eprintln!("reconstructed {rec}");
+                    eprintln!("reconstructed {rec}");
 
                     for _ in 0..EXTRA_SAMPLES {
                         let n = [(); NVARS].map(|_| rand_int(&mut rng));

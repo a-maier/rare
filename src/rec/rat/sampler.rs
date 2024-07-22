@@ -45,10 +45,6 @@ impl Sampler {
         self.status
     }
 
-    pub fn reset(&mut self) {
-        self.status = Status::Success(0);
-    }
-
     pub(crate) fn status(&self) -> Status {
         self.status
     }

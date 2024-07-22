@@ -6,6 +6,7 @@ pub mod finite;
 /// Thiele (univariate) reconstruction
 pub mod thiele_univar;
 /// Multivariate reconstruction based on Thiele algorithm
+#[cfg(feature = "thiele-multivar")]
 pub mod thiele_multivar;
 #[cfg(feature = "thiele-linear-rec")]
 /// Combination of Thiele reconstruction and solving linear systems of equations

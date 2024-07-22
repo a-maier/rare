@@ -47,6 +47,55 @@ impl<T, const Z: usize> FlatPoly<T, Z> {
     pub fn term(&self, i: usize) -> &FlatMono<T, Z> {
         &self.terms[i]
     }
+
+}
+
+impl<T, const Z: usize> FlatPoly<T, Z>
+where
+    FlatPoly<T, Z>: One + Clone,
+    FlatMono<T, Z>: One + Clone,
+    for<'a> FlatMono<T, Z>: MulAssign<&'a FlatMono<T, Z>> + MulAssign<&'a T>,
+    for<'a> &'a T: Pow<u32, Output = T>,
+    T: From<u64> + Zero
+{
+    pub fn powu(&self, n: u32) -> Self {
+        if n.is_zero() {
+            return Self::one();
+        }
+        if n.is_one() {
+            return self.clone();
+        }
+        match self.len() {
+            0 => self.clone(),
+            1 => self.term(0).powu(n).into(),
+            2 => {
+                let a = self.term(0);
+                let b = self.term(1);
+                let mut res_terms = Vec::from_iter(
+                    (0..=n).scan(
+                        FlatMono::<T, Z>::one(),
+                        |b_to_k, _| {
+                            let res = b_to_k.clone();
+                            *b_to_k *= b;
+                            Some(res)
+                        }
+                    ));
+                let mut binom_coeff = 1;
+                let mut a_to_l = FlatMono::one();
+                let n = n as u64;
+                for (k, term) in res_terms.iter_mut().rev().enumerate() {
+                    let k = k as u64;
+                    *term *= &a_to_l;
+                    *term *= &T::from(binom_coeff);
+                    a_to_l *= a;
+                    binom_coeff = (binom_coeff * (n - k)) / (k + 1);
+                }
+                Self::from_raw_terms(res_terms)
+            }
+            _ => todo!("integer power for polynomial with more than two terms")
+        }
+
+    }
 }
 
 impl<T: Zero, const Z: usize> FlatPoly<T, Z> {
@@ -502,6 +551,17 @@ pub struct FlatMono<T, const Z: usize> {
 impl<T, const Z: usize> FlatMono<T, Z> {
     pub fn new(coeff: T, powers: [u32; Z]) -> Self {
         Self { coeff, powers }
+    }
+}
+
+impl<T, const Z: usize> FlatMono<T, Z>
+where for<'a> &'a T: Pow<u32, Output = T>,
+{
+    fn powu(&self, k: u32) -> Self {
+        Self {
+            powers: self.powers.map(|p| p * k),
+            coeff: self.coeff.pow(k),
+        }
     }
 }
 

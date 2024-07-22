@@ -301,7 +301,7 @@ macro_rules! impl_rat_rec {
                             std::mem::transmute(rec)
                         };
                         if self.sampler.status() == SampleStatus::Failed {
-                            self.sampler.reset()
+                            self.sampler == Sampler::new(self.extra_pts())
                         }
                     }
                 }
