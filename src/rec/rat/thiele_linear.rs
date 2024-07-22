@@ -79,8 +79,7 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                 } else {
                     let nnum = nterms_with_max_pows(self.num_pows());
                     let nden = nterms_with_max_pows(self.den_pows());
-                    self.status =
-                        Status::Rat(nnum + nden + self.extra_pts - 1);
+                    self.status = Status::Rat(nnum + nden + self.extra_pts - 1);
                 }
             }
             Ok(Continue(n)) => {
@@ -229,8 +228,8 @@ mod tests {
     use super::*;
     use ::rand::{Rng, SeedableRng};
 
-    use crate::rec::primes::LARGE_PRIMES;
     use crate::algebra::poly::flat::FlatMono;
+    use crate::rec::primes::LARGE_PRIMES;
     use crate::traits::{One, Zero};
     use paste::paste;
     use rug::integer::Order;

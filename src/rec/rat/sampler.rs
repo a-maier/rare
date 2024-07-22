@@ -12,16 +12,11 @@ impl Sampler {
     pub fn new(successes_needed: usize) -> Self {
         Self {
             successes_needed,
-            status: Default::default()
+            status: Default::default(),
         }
     }
 
-    pub fn add_pt<Arg, Val, F>(
-        &mut self,
-        z: &Arg,
-        q_z: Val,
-        rat: &F
-    ) -> Status
+    pub fn add_pt<Arg, Val, F>(&mut self, z: &Arg, q_z: Val, rat: &F) -> Status
     where
         F: TryEval<Arg, Output = Val>,
         Val: Eq,

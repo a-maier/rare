@@ -701,8 +701,8 @@ mod tests {
     use rand_xoshiro::rand_core::SeedableRng;
 
     use crate::{
-        traits::{One, TryEval, Zero},
         algebra::poly::flat::FlatMono,
+        traits::{One, TryEval, Zero},
     };
 
     use super::*;
@@ -966,7 +966,8 @@ mod tests {
         log_init();
 
         const P: u64 = 1152921504606846883;
-        let shift = [775169054918279961u64, 605504957251852359u64].map(Z64::<P>::from);
+        let shift =
+            [775169054918279961u64, 605504957251852359u64].map(Z64::<P>::from);
         let x = [131868931179401u64, 348565720239513221u64].map(Z64::<P>::from);
         assert_eq!(x, z_to_x(x_to_z(x, &shift), &shift));
     }

@@ -7,15 +7,19 @@ use seq_macro::seq;
 use thiserror::Error;
 
 use crate::{
-    algebra::{poly::flat::FlatPoly, rat::{NoneError, Rat}},
+    algebra::{
+        poly::flat::FlatPoly,
+        rat::{NoneError, Rat},
+    },
     rec::{
         primes::LARGE_PRIMES,
         rat::{
-            util::{find_largest_missing_mod, ModPts, RecError},
             ffrat::FFRat,
-            finite::thiele::ThieleRec
+            finite::thiele::ThieleRec,
+            util::{find_largest_missing_mod, ModPts, RecError},
         },
-    }, traits::TryEval
+    },
+    traits::TryEval,
 };
 
 const P0: u64 = LARGE_PRIMES[0];
@@ -54,7 +58,7 @@ impl Rec {
             res: Err(NoneError {}),
             modulus: Default::default(),
             sample_agree: 0,
-            status: Status::NeedNextMod
+            status: Status::NeedNextMod,
         }
     }
 
@@ -66,27 +70,31 @@ impl Rec {
         let z = z[0];
         self.sample(z, q_z);
         if self.status() == Status::Done {
-            return Ok(())
+            return Ok(());
         }
         if !self.rec.rec_started() {
             debug!("New characteristic: {P}");
             self.modulus = P;
         } else if P != self.modulus {
-            return Err(RecError::Mod{expected: self.modulus, found: P});
+            return Err(RecError::Mod {
+                expected: self.modulus,
+                found: P,
+            });
         }
         // SAFETY:
         // `ThieleRec` should have the same layout independently of `P`
-        let rec: &'a mut ThieleRec<P> = unsafe {
-            std::mem::transmute(&mut self.rec)
-        };
+        let rec: &'a mut ThieleRec<P> =
+            unsafe { std::mem::transmute(&mut self.rec) };
         if rec.add_pt(z, q_z) == ControlFlow::Break(()) {
             self.status = Status::NeedNextMod;
-            let next_mod_rec = std::mem::replace(
-                rec,
-                ThieleRec::new(self.extra_pts)
-            ).into_rat();
+            let next_mod_rec =
+                std::mem::replace(rec, ThieleRec::new(self.extra_pts))
+                    .into_rat();
             let next_mod_rec: Rat<FlatPoly<_, 1>> = next_mod_rec.into();
-            debug!("Finished reconstruction modulo {}: {next_mod_rec}", self.modulus);
+            debug!(
+                "Finished reconstruction modulo {}: {next_mod_rec}",
+                self.modulus
+            );
             if self.rat.modulus.is_zero() {
                 self.rat = next_mod_rec.into();
             } else {
@@ -99,12 +107,7 @@ impl Rec {
         Ok(())
     }
 
-
-    fn sample<const P: u64>(
-        &mut self,
-        z: Z64<P>,
-        q_z: Z64<P>
-    ) {
+    fn sample<const P: u64>(&mut self, z: Z64<P>, q_z: Z64<P>) {
         if let Ok(res) = self.res.as_ref() {
             let our_q_z = res.try_eval(&[z]);
             if our_q_z == Some(q_z) {
@@ -153,12 +156,11 @@ pub fn rec_from_pts(
         return Err(FailedRec::Empty);
     }
     let mut rec = Rec::new(extra_pts);
-    pts.sort_by(
-        |pt1, pt2| (pt2.pts.len(), pt2.modulus)
-            .cmp(&(pt1.pts.len(), pt1.modulus))
-    );
-    for ModPts{modulus, pts} in pts.iter_mut() {
-        seq!{ PP in 0..114 {{
+    pts.sort_by(|pt1, pt2| {
+        (pt2.pts.len(), pt2.modulus).cmp(&(pt1.pts.len(), pt1.modulus))
+    });
+    for ModPts { modulus, pts } in pts.iter_mut() {
+        seq! { PP in 0..114 {{
             if *modulus == LARGE_PRIMES[PP] {
                 const P: u64 = LARGE_PRIMES[PP];
                 for pt in pts {
@@ -179,9 +181,8 @@ pub fn rec_from_pts(
         }}}
         return Err(FailedRec::UnknownMod(*modulus));
     }
-    let suggested_next_mod = find_largest_missing_mod(
-        pts.iter().map(|pt| pt.modulus)
-    );
+    let suggested_next_mod =
+        find_largest_missing_mod(pts.iter().map(|pt| pt.modulus));
     if let Some(next_mod) = suggested_next_mod {
         Err(FailedRec::MoreMods(next_mod))
     } else {
@@ -195,7 +196,9 @@ pub enum FailedRec {
     Empty,
     #[error("Need more points in characteristic {0}")]
     MorePts(u64),
-    #[error("Need points in new characteristic. Suggested next characteristic: {0}")]
+    #[error(
+        "Need points in new characteristic. Suggested next characteristic: {0}"
+    )]
     MoreMods(u64),
     #[error("Need points in new characteristic, but no supported characteristics are left.")]
     NoModsLeft,
@@ -208,8 +211,8 @@ mod tests {
     use super::*;
     use ::rand::{Rng, SeedableRng};
 
-    use crate::rec::primes::LARGE_PRIMES;
     use crate::algebra::poly::flat::FlatMono;
+    use crate::rec::primes::LARGE_PRIMES;
     use crate::traits::Zero;
     use rug::integer::Order;
     use seq_macro::seq;
@@ -245,9 +248,7 @@ mod tests {
         FlatPoly::from_terms((0..nterms).map(|_| rand_term(&mut rng)).collect())
     }
 
-    fn rand_rat(
-        mut rng: impl Rng,
-    ) -> Rat<FlatPoly<Integer, 1>> {
+    fn rand_rat(mut rng: impl Rng) -> Rat<FlatPoly<Integer, 1>> {
         let mut den = FlatPoly::zero();
         while den.is_zero() {
             den = rand_poly(&mut rng);
@@ -266,7 +267,7 @@ mod tests {
             eprintln!("trying to reconstruct {orig}");
             let mut rec = Rec::new(1);
             'rec: {
-                seq!{ N in 0..20 {{
+                seq! { N in 0..20 {{
                     const P: u64 = LARGE_PRIMES[N];
                     loop {
                         let (z, q_z) = std::iter::repeat_with(|| {

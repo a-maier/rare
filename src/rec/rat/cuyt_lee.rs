@@ -1,4 +1,8 @@
-use std::{any::Any, fmt::{self, Display}, ops::ControlFlow};
+use std::{
+    any::Any,
+    fmt::{self, Display},
+    ops::ControlFlow,
+};
 
 use ffnt::Z64;
 use log::{debug, trace};
@@ -15,10 +19,10 @@ use crate::{
         primes::LARGE_PRIMES,
         rat::{
             ffrat::FFRat,
-            finite::cuyt_lee::{Needed as ModNeeded, z_to_x},
+            finite::cuyt_lee::{z_to_x, Needed as ModNeeded},
             sampler::Sampler,
-            util::{find_largest_missing_mod, ModPts, RecError}
-        }
+            util::{find_largest_missing_mod, ModPts, RecError},
+        },
     },
     Integer,
 };
@@ -369,13 +373,11 @@ pub fn rec_from_pts<const N: usize>(
     extra_pts: usize,
 ) -> Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>> {
     fn cast_res<const M: usize, const N: usize>(
-        res: Result<Rat<FlatPoly<Integer, M>>, FailedRec<M>>
+        res: Result<Rat<FlatPoly<Integer, M>>, FailedRec<M>>,
     ) -> Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>> {
         let mut res = Some(res);
         let res: &mut dyn Any = &mut res;
-        res.downcast_mut()
-            .and_then(Option::take)
-            .unwrap()
+        res.downcast_mut().and_then(Option::take).unwrap()
     }
 
     use std::mem::{transmute, transmute_copy};
@@ -385,25 +387,65 @@ pub fn rec_from_pts<const N: usize>(
             0 => todo!(),
             1 => {
                 use crate::rec::rat::thiele::FailedRec as RecErr;
-                match crate::rec::rat::thiele::rec_from_pts(transmute(pts), extra_pts) {
+                match crate::rec::rat::thiele::rec_from_pts(
+                    transmute(pts),
+                    extra_pts,
+                ) {
                     Ok(res) => Ok(transmute(res)),
                     Err(RecErr::Empty) => Err(FailedRec::<N>::Empty),
                     Err(RecErr::NoModsLeft) => Err(FailedRec::<N>::NoModsLeft),
-                    Err(RecErr::UnknownMod(m)) => Err(FailedRec::<N>::UnknownMod(m)),
-                    Err(RecErr::MoreMods(m)) => Err(FailedRec::<N>::MoreMods(m)),
-                    Err(RecErr::MorePts(modulus)) => Err(FailedRec::<N>::MorePts {
-                        modulus, needed: Needed::Pts(Vec::new())
-                    }),
+                    Err(RecErr::UnknownMod(m)) => {
+                        Err(FailedRec::<N>::UnknownMod(m))
+                    }
+                    Err(RecErr::MoreMods(m)) => {
+                        Err(FailedRec::<N>::MoreMods(m))
+                    }
+                    Err(RecErr::MorePts(modulus)) => {
+                        Err(FailedRec::<N>::MorePts {
+                            modulus,
+                            needed: Needed::Pts(Vec::new()),
+                        })
+                    }
                 }
             }
-            2 => cast_res(rec_from_pts2(transmute(pts), transmute_copy(&shift), extra_pts)),
-            3 => cast_res(rec_from_pts3(transmute(pts), transmute_copy(&shift), extra_pts)),
-            4 => cast_res(rec_from_pts4(transmute(pts), transmute_copy(&shift), extra_pts)),
-            5 => cast_res(rec_from_pts5(transmute(pts), transmute_copy(&shift), extra_pts)),
-            6 => cast_res(rec_from_pts6(transmute(pts), transmute_copy(&shift), extra_pts)),
-            7 => cast_res(rec_from_pts7(transmute(pts), transmute_copy(&shift), extra_pts)),
-            8 => cast_res(rec_from_pts8(transmute(pts), transmute_copy(&shift), extra_pts)),
-            _ => unimplemented!("Multivariate reconstruction with more than 8 variables")
+            2 => cast_res(rec_from_pts2(
+                transmute(pts),
+                transmute_copy(&shift),
+                extra_pts,
+            )),
+            3 => cast_res(rec_from_pts3(
+                transmute(pts),
+                transmute_copy(&shift),
+                extra_pts,
+            )),
+            4 => cast_res(rec_from_pts4(
+                transmute(pts),
+                transmute_copy(&shift),
+                extra_pts,
+            )),
+            5 => cast_res(rec_from_pts5(
+                transmute(pts),
+                transmute_copy(&shift),
+                extra_pts,
+            )),
+            6 => cast_res(rec_from_pts6(
+                transmute(pts),
+                transmute_copy(&shift),
+                extra_pts,
+            )),
+            7 => cast_res(rec_from_pts7(
+                transmute(pts),
+                transmute_copy(&shift),
+                extra_pts,
+            )),
+            8 => cast_res(rec_from_pts8(
+                transmute(pts),
+                transmute_copy(&shift),
+                extra_pts,
+            )),
+            _ => unimplemented!(
+                "Multivariate reconstruction with more than 8 variables"
+            ),
         }
     }
 }
@@ -427,12 +469,13 @@ impl<const N: usize> Display for Needed<N> {
 pub enum FailedRec<const N: usize> {
     #[error("Need points for reconstruction")]
     Empty,
-    #[error("Need more points in characteristic {modulus}. Next points: {needed}")]
-    MorePts {
-        modulus: u64,
-        needed: Needed<N>,
-    },
-    #[error("Need points in new characteristic. Suggested next characteristic: {0}")]
+    #[error(
+        "Need more points in characteristic {modulus}. Next points: {needed}"
+    )]
+    MorePts { modulus: u64, needed: Needed<N> },
+    #[error(
+        "Need points in new characteristic. Suggested next characteristic: {0}"
+    )]
     MoreMods(u64),
     #[error("Need points in new characteristic, but no supported characteristics are left.")]
     NoModsLeft,
