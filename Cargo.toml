@@ -36,7 +36,7 @@ name = "bench"
 harness = false
 
 [features]
-default = ["thiele-multivar"]
+default = []
 recfn = []
 cuyt-lee-rec = ["linear", "sample"]
 thiele-linear-rec = ["linear"]
