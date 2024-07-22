@@ -95,9 +95,15 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                     let z = z.map(|z| Z64::new_unchecked(u64::from(z)));
                     (z, std::mem::transmute(q_z))
                 };
-                let res = match rec.rec.add_pt(z, q_z)? {
-                    Continue(n) => Varying(n),
-                    Break(powers) => {
+                // we don't actually need the power of the last
+                // variable for anything, so we stop before
+                // reconstructing it. We set the power to `u32::MAX`,
+                // since that simplifies `Transform::undo`
+                let res = match rec.rec.add_pt(z, q_z)?  {
+                    Continue(n) if n < (N - 1) => Varying(n),
+                    _ => {
+                        let mut powers = rec.rec.cur_powers();
+                        powers[N - 1] = [u32::MAX; 2];
                         let mut scaled_rec = ScaledRec::default();
                         scaled_rec.transform = Transform {
                             scale: powers.map(|p| p.into_iter().max().unwrap()),
@@ -105,7 +111,7 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                         };
                         self.rec = DegreeOrScaledRec::ScaledRec(scaled_rec);
                         Scaling
-                    },
+                    }
                 };
                 Ok(Continue(res))
             },
@@ -229,6 +235,7 @@ impl<const N: usize> Transform<N> {
                     .collect()
             );
         }
+        assert_eq!(self.scale[N - 1], u32::MAX);
         let shift = self.shift.map(|s| s.into());
         let mut res = FlatPoly::new();
         for (pow, coeff) in poly.into_coeff().into_iter().enumerate() {

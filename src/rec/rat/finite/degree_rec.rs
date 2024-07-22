@@ -68,6 +68,10 @@ impl<const P: u64, const N: usize> DegreeRec<P, N> {
         }
     }
 
+    pub fn cur_powers(&self) -> [[u32; 2]; N] {
+        self.powers
+    }
+
     fn check_arg(&self, z: [Z64<P>; N]) -> Result<(), Error<P, N>> {
         if let Some(last) = self.last_arg {
             let idx = self.cur_idx;
