@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     fmt::{self, Display},
     ops::ControlFlow,
 };
@@ -7,7 +6,6 @@ use std::{
 use ffnt::Z64;
 use log::{debug, trace};
 use paste::paste;
-use seq_macro::seq;
 use thiserror::Error;
 
 use crate::{
@@ -21,13 +19,16 @@ use crate::{
             ffrat::FFRat,
             finite::cuyt_lee::{z_to_x, Needed as ModNeeded},
             sampler::Sampler,
-            util::{find_largest_missing_mod, ModPts, RecError},
+            util::RecError,
         },
     },
     Integer,
 };
 
 use crate::rec::rat::sampler::Status as SampleStatus;
+
+#[cfg(feature = "rec-from-pts")]
+use crate::rec::rat::util::ModPts;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Status<const P: u64, const N: usize> {
@@ -310,11 +311,15 @@ macro_rules! impl_rat_rec {
                     }
                 }
 
+                #[cfg(feature = "rec-from-pts")]
                 fn [<rec_from_pts $n>](
                     pts: &mut [ModPts<$n>],
                     shift: [u64; $n],
                     extra_pts: usize,
                 ) -> Result<Rat<FlatPoly<Integer, $n>>, FailedRec<$n>> {
+                    use crate::rec::rat::util::find_largest_missing_mod;
+                    use seq_macro::seq;
+
                     let mut rec = [<Rec $n>]::with_shift(extra_pts, shift);
                     pts.sort_by(
                         |pt1, pt2| (pt2.pts.len(), pt2.modulus)
@@ -367,6 +372,7 @@ macro_rules! impl_rat_rec {
 // impl_rat_rec! {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 impl_rat_rec! {2, 3, 4, 5, 6, 7, 8}
 
+#[cfg(feature = "rec-from-pts")]
 pub fn rec_from_pts<const N: usize>(
     pts: &mut [ModPts<N>],
     shift: [u64; N],
@@ -375,6 +381,7 @@ pub fn rec_from_pts<const N: usize>(
     fn cast_res<const M: usize, const N: usize>(
         res: Result<Rat<FlatPoly<Integer, M>>, FailedRec<M>>,
     ) -> Result<Rat<FlatPoly<Integer, N>>, FailedRec<N>> {
+        use std::any::Any;
         let mut res = Some(res);
         let res: &mut dyn Any = &mut res;
         res.downcast_mut().and_then(Option::take).unwrap()

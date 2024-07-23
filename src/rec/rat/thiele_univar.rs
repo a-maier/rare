@@ -3,7 +3,6 @@ use std::ops::ControlFlow;
 use ffnt::Z64;
 use log::debug;
 use rug::Integer;
-use seq_macro::seq;
 use thiserror::Error;
 
 use crate::{
@@ -16,7 +15,7 @@ use crate::{
         rat::{
             ffrat::FFRat,
             finite::thiele::ThieleRec,
-            util::{find_largest_missing_mod, ModPts, RecError},
+            util::RecError,
         },
     },
     traits::TryEval,
@@ -148,10 +147,16 @@ impl Rec {
     }
 }
 
+#[cfg(feature = "rec-from-pts")]
+use crate::rec::rat::util::ModPts;
+#[cfg(feature = "rec-from-pts")]
 pub fn rec_from_pts(
     pts: &mut [ModPts<1>],
     extra_pts: usize,
 ) -> Result<Rat<FlatPoly<Integer, 1>>, FailedRec> {
+    use seq_macro::seq;
+    use crate::rec::rat::util::find_largest_missing_mod;
+
     if pts.is_empty() {
         return Err(FailedRec::Empty);
     }

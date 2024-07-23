@@ -37,9 +37,11 @@ harness = false
 
 [features]
 default = []
-recfn = []
+recfn = ["linear"]
 cuyt-lee-rec = ["linear", "sample"]
 thiele-linear-rec = ["linear"]
 thiele-multivar = ["sample"]
+rec-from-pts = ["primes"]
 linear = []
 sample = []
+primes = []

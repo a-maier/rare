@@ -5,7 +5,7 @@ mod arr;
 #[cfg(feature = "linear")]
 mod matrix;
 pub mod rand;
-#[cfg(feature = "thiele-linear-rec")]
+#[cfg(all(feature = "thiele-linear-rec", feature = "rec-from-pts"))]
 pub mod rec_rat_linear;
 pub mod traits;
 mod util;
@@ -18,7 +18,7 @@ pub mod rec;
 
 // #[cfg(feature = "recfn")]
 // mod rec_rat_fn;
-#[cfg(feature = "recfn")]
+#[cfg(all(feature = "thiele-linear-rec", feature = "recfn"))]
 mod rec_rat_fn_linear;
 
 pub use ffnt::Z64;
