@@ -69,12 +69,12 @@ impl<const P: u64> ThieleRec<P> {
     }
 
     fn a_next(&self, y: Z64<P>, f_y: Z64<P>) -> Option<Z64<P>> {
-        let mut a = f_y;
-        // TODO: check if calculating `a` with less divisions is faster
+        let mut n = f_y;
+        let mut d = Z64::one();
         for (ai, yi) in &self.rat.coeffs {
-            a = (y - yi).try_div(a - ai)?;
+            (n, d) = ((y - yi) * d, n - ai * d);
         }
-        (y - self.y_last).try_div(a - self.rat.a_last)
+        ((y - self.y_last) * d).try_div(n - self.rat.a_last * d)
     }
 
     pub fn into_rat(self) -> ThieleRat<Z64<P>> {
