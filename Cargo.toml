@@ -1,6 +1,6 @@
 [package]
 name = "rare"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 description = "Rational function reconstruction"
 authors = ["Andreas Maier <andreas.martin.maier@desy.de>"]
