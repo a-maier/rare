@@ -93,7 +93,7 @@ macro_rules! impl_rat_rec {
                         z: [Z64<P>; $n],
                         q_z: Z64<P>,
                     ) -> Result<(), RecError> {
-                        if self.status == Status::Done || self.sample(z, q_z) == SampleStatus::Complete {
+                        if self.status == Status::Done {
                             return Ok(());
                         }
                         if self.status == Status::NextMod {
@@ -101,6 +101,9 @@ macro_rules! impl_rat_rec {
                         }
                         if P != self.modulus {
                             return Err(RecError::Mod{expected: self.modulus, found: P});
+                        }
+                        if self.sample(z, q_z) == SampleStatus::Complete {
+                            return Ok(());
                         }
                         let rec: &'a mut [<RatRecMod $n>]<P> = unsafe {
                             std::mem::transmute(&mut self.rec)
