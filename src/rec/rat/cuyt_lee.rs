@@ -294,8 +294,8 @@ macro_rules! impl_rat_rec {
                             self.rat = next_mod_rec.into();
                         } else {
                             self.rat.merge_crt(next_mod_rec);
-                            self.res = (&self.rat).try_into();
                         }
+                        self.res = (&self.rat).try_into();
                         self.status = Status::NextMod;
                     }
 
