@@ -123,8 +123,10 @@ impl<const P: u64, const N: usize> Rec<P, N> {
                             scale: powers.map(|p| p.into_iter().max().unwrap()),
                             shift: rec.shift,
                         };
+                        let sampler = Sampler::new(self.extra_pts);
                         let scaled_rec = ScaledRec{
                             transform,
+                            sampler,
                             ..Default::default()
                         };
                         self.rec = DegreeOrScaledRec::ScaledRec(scaled_rec);
