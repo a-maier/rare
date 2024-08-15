@@ -255,7 +255,7 @@ mod tests {
     use super::*;
     use ::rand::Rng;
 
-    use crate::sparse_poly::FlatMono;
+    use crate::algebra::poly::flat::FlatMono;
     use crate::traits::Zero;
     use paste::paste;
     use rand::SeedableRng;
