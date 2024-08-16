@@ -55,7 +55,7 @@ where
     FlatMono<T, Z>: One + Clone,
     for<'a> FlatMono<T, Z>: MulAssign<&'a FlatMono<T, Z>> + MulAssign<&'a T>,
     for<'a> &'a T: Pow<u32, Output = T>,
-    T: From<u64> + Zero,
+    T: From<u128> + Zero,
 {
     pub fn powu(&self, n: u32) -> Self {
         if n.is_zero() {
@@ -80,13 +80,15 @@ where
                 ));
                 let mut binom_coeff = 1;
                 let mut a_to_l = FlatMono::one();
-                let n = n as u64;
+                let n = n as u128;
                 for (k, term) in res_terms.iter_mut().rev().enumerate() {
-                    let k = k as u64;
+                    let k = k as u128;
                     *term *= &a_to_l;
                     *term *= &T::from(binom_coeff);
                     a_to_l *= a;
-                    binom_coeff = (binom_coeff * (n - k)) / (k + 1);
+                    let binom_coeff_num = binom_coeff.checked_mul(n - k)
+                        .expect("Overflow calculating binomial coefficient");
+                    binom_coeff = binom_coeff_num / (k + 1);
                 }
                 Self::from_raw_terms(res_terms)
             }
