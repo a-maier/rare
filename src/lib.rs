@@ -1,3 +1,4 @@
+#![doc = include_str!("../Readme.md")]
 /// Utilities for tests and benchmarks
 #[doc(hidden)]
 pub mod _test_util;
