@@ -8,6 +8,20 @@ rational function `f(x, y, z, ...)` from a number of probes `(x, y, z,
 This crate is highly experimental. The current API is not very user
 friendly and likely to change drastically in the future.
 
+# Usage
+
+Add the following lines to your Cargo.toml:
+
+```toml
+[dependencies.rare]
+git = "https://github.com/a-maier/rare.git"
+features = ["thiele-multivar"]
+tag = "0.9.2"
+```
+
+The `features` entry determines the available reconstruction
+algorithms, see the [algorithms section](#Implemented-algorithms).
+
 # Example
 
 Reconstruct the function `f(x) = x/(1 + x + x^2)` from its function
